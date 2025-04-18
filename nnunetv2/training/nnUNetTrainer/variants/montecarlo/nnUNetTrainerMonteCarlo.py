@@ -1,26 +1,62 @@
+from typing import Tuple, Union, List
+
+import numpy as np
+import torch
+
+from torch import autocast, nn
+
+import pydoc
+
+#from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
+from nnunetv2.utilities.helpers import empty_cache, dummy_context
+from nnunetv2.utilities.label_handling.label_handling import convert_labelmap_to_one_hot, determine_num_input_channels
+from nnunetv2.utilities.plans_handling.plans_handler import PlansManager
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
+from nnunetv2.nets.resnet import ResidualUNet, ResidualEncoderUNet
 
 class nnUNetTrainerMonteCarlo(nnUNetTrainer):
-    """
-    This trainer is used for Monte Carlo dropout. It is a variant of the nnUNetTrainer that uses dropout during
-    inference to obtain uncertainty estimates.
-    """
+    # def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
+    #              device: torch.device = torch.device('cuda')):
+    #     super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
+        
+    @staticmethod
+    def build_network_architecture(architecture_class_name: str,
+                                   arch_init_kwargs: dict,
+                                   arch_init_kwargs_req_import: Union[List[str], Tuple[str, ...]],
+                                   num_input_channels: int,
+                                   num_output_channels: int,
+                                   enable_deep_supervision: bool = True) -> nn.Module:
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._enable_monte_carlo = True
-        self._num_monte_carlo_samples = kwargs.get('num_monte_carlo_samples', 10)
-        self._monte_carlo_dropout = kwargs.get('monte_carlo_dropout', 0.5)
-        self._monte_carlo_dropout_mode = kwargs.get('monte_carlo_dropout_mode', 'train')
-        self._monte_carlo_dropout_layers = kwargs.get('monte_carlo_dropout_layers', None)
-        self._monte_carlo_dropout_kwargs = kwargs.get('monte_carlo_dropout_kwargs', {})
-        self._monte_carlo_dropout_kwargs['p'] = self._monte_carlo_dropout
-        self._monte_carlo_dropout_kwargs['inplace'] = True
-        self._monte_carlo_dropout_kwargs['mode'] = self._monte_carlo_dropout_mode
-        self._monte_carlo_dropout_kwargs['layers'] = self._monte_carlo_dropout_layers
-        self._monte_carlo_dropout_kwargs['num_samples'] = self._num_monte_carlo_samples
-        self._monte_carlo_dropout_kwargs['enable_monte_carlo'] = self._enable_monte_carlo
-        self._monte_carlo_dropout_kwargs['monte_carlo_dropout'] = self._monte_carlo_dropout
-        self._monte_carlo_dropout_kwargs['monte_carlo_dropout_mode'] = self._monte_carlo_dropout_mode
-        self._monte_carlo_dropout_kwargs['monte_carlo_dropout_layers'] = self._monte_carlo_dropout_layers
-        self._monte_carlo_dropout_kwargs['monte_carlo_dropout_kwargs'] = self._monte_carlo_dropout_kwargs
+        return get_network_from_plans(
+            architecture_class_name,
+            arch_init_kwargs,
+            arch_init_kwargs_req_import,
+            num_input_channels,
+            num_output_channels,
+            allow_init=True,
+            deep_supervision=enable_deep_supervision)
+
+
+def get_network_from_plans(arch_class_name, arch_kwargs, arch_kwargs_req_import, input_channels, output_channels,
+                        allow_init=True, deep_supervision: Union[bool, None] = None):
+    network_class = arch_class_name
+    architecture_kwargs = dict(**arch_kwargs)
+    for ri in arch_kwargs_req_import:
+        if architecture_kwargs[ri] is not None:
+            architecture_kwargs[ri] = pydoc.locate(architecture_kwargs[ri])
+    #chose your network here: ResidualEncoderUNet, ResidualUNet
+    nw_class = ResidualEncoderUNet
+
+    if deep_supervision is not None and 'deep_supervision' not in arch_kwargs.keys():
+        arch_kwargs['deep_supervision'] = deep_supervision
+
+    network = nw_class(
+        input_channels=input_channels,
+        num_classes=output_channels,
+        **architecture_kwargs
+    )
+
+    if hasattr(network, 'initialize') and allow_init:
+        network.apply(network.initialize)
+
+    return network
