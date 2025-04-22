@@ -46,7 +46,7 @@ def get_network_from_plans(arch_class_name, arch_kwargs, arch_kwargs_req_import,
     for ri in arch_kwargs_req_import:
         if architecture_kwargs[ri] is not None:
             architecture_kwargs[ri] = pydoc.locate(architecture_kwargs[ri])
-    #chose your network here: ResidualEncoderUNet, ResidualUNet
+    #chose your network here: ResidualEncoderDropoutUNet
     nw_class = ResidualEncoderDropoutUNet
 
     if deep_supervision is not None and 'deep_supervision' not in arch_kwargs.keys():
