@@ -12,9 +12,11 @@ from nnunetv2.utilities.helpers import empty_cache, dummy_context
 from nnunetv2.utilities.label_handling.label_handling import convert_labelmap_to_one_hot, determine_num_input_channels
 from nnunetv2.utilities.plans_handling.plans_handler import PlansManager
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
-from nnunetv2.nets.resnet import ResidualUNet, ResidualEncoderUNet
+#from nnunetv2.nets.resnet import ResidualUNet, ResidualEncoderUNet
+from nnunetv2.nets.resnet_dropout import ResidualEncoderDropoutUNet, ResidualDropoutUNet
 
-class nnUNetTrainerMonteCarlo(nnUNetTrainer):
+
+class nnUNetTrainerDropout(nnUNetTrainer):
     # def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
     #              device: torch.device = torch.device('cuda')):
     #     super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
@@ -45,7 +47,7 @@ def get_network_from_plans(arch_class_name, arch_kwargs, arch_kwargs_req_import,
         if architecture_kwargs[ri] is not None:
             architecture_kwargs[ri] = pydoc.locate(architecture_kwargs[ri])
     #chose your network here: ResidualEncoderUNet, ResidualUNet
-    nw_class = ResidualEncoderUNet
+    nw_class = ResidualEncoderDropoutUNet
 
     if deep_supervision is not None and 'deep_supervision' not in arch_kwargs.keys():
         arch_kwargs['deep_supervision'] = deep_supervision
