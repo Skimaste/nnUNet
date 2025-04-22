@@ -3,8 +3,9 @@ import torch
 from torch import nn
 from typing import Union, List, Tuple, Type
 
-from torch.nn.modules.dropout import _DropoutNd
+from torch.nn.modules.dropout import _DropoutNd, Dropout2d, Dropout3d
 
+from dynamic_network_architectures.building_blocks.residual import StackedResidualBlocks, BottleneckD, BasicBlockD
 from dynamic_network_architectures.building_blocks.simple_conv_blocks import StackedConvBlocks
 from dynamic_network_architectures.building_blocks.helper import get_matching_convtransp
 #from dynamic_network_architectures.building_blocks.residual_encoders import ResidualEncoder
@@ -61,6 +62,7 @@ class UNetDecoderDropout(nn.Module):
         dropout_op_kwargs = encoder.dropout_op_kwargs if dropout_op_kwargs is None else dropout_op_kwargs
         nonlin = encoder.nonlin if nonlin is None else nonlin
         nonlin_kwargs = encoder.nonlin_kwargs if nonlin_kwargs is None else nonlin_kwargs
+        skip_dropout_layers = encoder.skip_dropout_layers if dropout_op is not None else 0
 
 
         # we start with the bottleneck and work out way up
@@ -76,18 +78,34 @@ class UNetDecoderDropout(nn.Module):
                 bias=conv_bias
             ))
             # input features to conv is 2x input_features_skip (concat input_features_skip with transpconv output)
-            stages.append(StackedConvBlocks(
-                n_conv_per_stage[s-1], encoder.conv_op, 2 * input_features_skip, input_features_skip,
-                encoder.kernel_sizes[-(s + 1)], 1,
-                conv_bias,
-                norm_op,
-                norm_op_kwargs,
-                dropout_op,
-                dropout_op_kwargs,
-                nonlin,
-                nonlin_kwargs,
-                nonlin_first
-            ))
+            if skip_dropout_layers is not None and s < n_stages_encoder - skip_dropout_layers:
+                
+                stage = StackedConvBlocks(
+                    n_conv_per_stage[s-1], encoder.conv_op, 2 * input_features_skip, input_features_skip,
+                    encoder.kernel_sizes[-(s + 1)], 1,
+                    conv_bias,
+                    norm_op,
+                    norm_op_kwargs,
+                    dropout_op,
+                    dropout_op_kwargs,
+                    nonlin,
+                    nonlin_kwargs,
+                    nonlin_first
+                )
+            else:
+                stage = StackedConvBlocks(
+                    n_conv_per_stage[s-1], encoder.conv_op, 2 * input_features_skip, input_features_skip,
+                    encoder.kernel_sizes[-(s + 1)], 1,
+                    conv_bias,
+                    norm_op,
+                    norm_op_kwargs,
+                    None,
+                    None,
+                    nonlin,
+                    nonlin_kwargs,
+                    nonlin_first
+                )
+            stages.append(stage)
 
             # we always build the deep supervision outputs so that we can always load parameters. If we don't do this
             # then a model trained with deep_supervision=True could not easily be loaded at inference time where
@@ -153,3 +171,56 @@ class UNetDecoderDropout(nn.Module):
             if self.deep_supervision or (s == (len(self.stages) - 1)):
                 output += np.prod([self.num_classes, *skip_sizes[-(s+1)]], dtype=np.int64)
         return output
+
+
+if __name__ == '__main__':
+    data = torch.rand((1, 3, 128, 160))  # [batch_size, channels, height, width]
+
+    # Create encoder
+    encoder = ResidualEncoderDropout(
+        input_channels=3,
+        n_stages=5,
+        features_per_stage=(2, 4, 6, 8, 10),
+        conv_op=nn.Conv2d,
+        kernel_sizes=3,
+        strides=((1, 1), 2, (2, 2), (2, 2), (2, 2)),
+        n_blocks_per_stage=2,
+        conv_bias=False,
+        norm_op=nn.BatchNorm2d,
+        dropout_op=Dropout2d,
+        dropout_op_kwargs={'p': 0.2},
+        nonlin=nn.ReLU,
+        nonlin_kwargs=None,
+        block=BasicBlockD,
+        bottleneck_channels=None,
+        return_skips=True,
+        disable_default_stem=False,
+        stem_channels=7,
+        pool_type='conv',
+        stochastic_depth_p=0.0,
+        squeeze_excitation=False,
+        squeeze_excitation_reduction_ratio=1. / 16,
+        skip_dropout_layers=2
+    )
+
+    # Create decoder
+    decoder = UNetDecoderDropout(
+        encoder=encoder,
+        num_classes=3,  # or however many classes you want
+        n_conv_per_stage=2,
+        deep_supervision=False,
+        nonlin_first=False,
+        norm_op=nn.BatchNorm2d,
+        norm_op_kwargs=None,
+        dropout_op=Dropout2d,
+        dropout_op_kwargs={'p': 0.2},
+        nonlin=nn.ReLU,
+        nonlin_kwargs=None,
+        conv_bias=False
+    )
+
+    # Forward pass (debugging)
+
+    output = decoder(encoder(data))
+
+    print(f"Output shape: {output.shape}")

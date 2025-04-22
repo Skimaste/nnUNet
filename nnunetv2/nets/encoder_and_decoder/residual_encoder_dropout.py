@@ -4,7 +4,7 @@ import numpy as np
 from typing import Union, Type, List, Tuple
 
 from torch.nn.modules.conv import _ConvNd
-from torch.nn.modules.dropout import _DropoutNd
+from torch.nn.modules.dropout import _DropoutNd, Dropout3d, Dropout2d, Dropout
 from dynamic_network_architectures.building_blocks.residual import StackedResidualBlocks, BottleneckD, BasicBlockD
 from dynamic_network_architectures.building_blocks.helper import maybe_convert_scalar_to_list, get_matching_pool_op
 from dynamic_network_architectures.building_blocks.simple_conv_blocks import StackedConvBlocks
@@ -141,6 +141,7 @@ class ResidualEncoderDropout(nn.Module):
         self.dropout_op_kwargs = dropout_op_kwargs
         self.conv_bias = conv_bias
         self.kernel_sizes = kernel_sizes
+        self.skip_dropout_layers = skip_dropout_layers
 
     def forward(self, x):
         if self.stem is not None:
@@ -180,13 +181,13 @@ if __name__ == '__main__':
         n_blocks_per_stage=2,
         conv_bias=False,
         norm_op=nn.BatchNorm2d,
-        dropout_op=_DropoutNd,
+        dropout_op=Dropout2d,
         dropout_op_kwargs={'p': 0.2},
         nonlin=nn.ReLU,
         nonlin_kwargs=None,
         block=BasicBlockD,         # optional, this is default already
         bottleneck_channels=None,
-        return_skips=False,
+        return_skips=True,
         disable_default_stem=False,
         stem_channels=7,
         pool_type='conv',
