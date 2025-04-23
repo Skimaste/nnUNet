@@ -23,7 +23,7 @@ from nnunetv2.utilities.utils import get_filenames_of_train_images_and_targets
 
 class ExperimentPlanner(object):
     def __init__(self, dataset_name_or_id: Union[str, int],
-                 gpu_memory_target_in_gb: float = 8,
+                 gpu_memory_target_in_gb: float = 32,
                  preprocessor_name: str = 'DefaultPreprocessor', plans_name: str = 'nnUNetPlans',
                  overwrite_target_spacing: Union[List[float], Tuple[float, ...]] = None,
                  suppress_transpose: bool = False):
