@@ -13,7 +13,7 @@ from nnunetv2.utilities.label_handling.label_handling import convert_labelmap_to
 from nnunetv2.utilities.plans_handling.plans_handler import PlansManager
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
 #from nnunetv2.nets.resnet import ResidualUNet, ResidualEncoderUNet
-from nnunetv2.nets.resnet_dropout import ResidualEncoderDropoutUNet, ResidualDropoutUNet
+from nnunetv2.nets.resnet_dropout import ResidualEncoderDropoutUNet
 
 
 class nnUNetTrainerDropout(nnUNetTrainer):
@@ -51,6 +51,9 @@ def get_network_from_plans(arch_class_name, arch_kwargs, arch_kwargs_req_import,
 
     if deep_supervision is not None and 'deep_supervision' not in arch_kwargs.keys():
         arch_kwargs['deep_supervision'] = deep_supervision
+
+    
+    
 
     network = nw_class(
         input_channels=input_channels,

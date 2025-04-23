@@ -8,7 +8,7 @@ from dynamic_network_architectures.building_blocks.residual import BasicBlockD, 
 #from dynamic_network_architectures.building_blocks.unet_decoder import UNetDecoder
 #from dynamic_network_architectures.building_blocks.unet_residual_decoder import UNetResDecoder
 from nnunetv2.nets.encoder_and_decoder.residual_encoder_dropout import ResidualEncoderDropout
-from nnunetv2.nets.encoder_and_decoder.decoder_dropout import 
+from nnunetv2.nets.encoder_and_decoder.decoder_dropout import UNetDecoderDropout
 from dynamic_network_architectures.initialization.weight_init import InitWeights_He
 from dynamic_network_architectures.initialization.weight_init import init_last_bn_before_add_to_0
 from torch import nn
@@ -36,11 +36,11 @@ class ResidualEncoderDropoutUNet(nn.Module):
                  dropout_op_kwargs: dict = None,
                  nonlin: Union[None, Type[torch.nn.Module]] = None,
                  nonlin_kwargs: dict = None,
+                 skip_dropout_layers: int = None,
                  deep_supervision: bool = False,
                  block: Union[Type[BasicBlockD], Type[BottleneckD]] = BasicBlockD,
                  bottleneck_channels: Union[int, List[int], Tuple[int, ...]] = None,
-                 stem_channels: int = None,
-                 skip_dropout_layers: int = None
+                 stem_channels: int = None
                  ):
         super().__init__()
         if isinstance(n_blocks_per_stage, int):
