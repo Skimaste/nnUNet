@@ -7,6 +7,7 @@ from torch.nn.modules.dropout import _DropoutNd, Dropout2d, Dropout3d
 
 from dynamic_network_architectures.building_blocks.residual import StackedResidualBlocks, BottleneckD, BasicBlockD
 from dynamic_network_architectures.building_blocks.simple_conv_blocks import StackedConvBlocks
+from nnunetv2.nets.encoder_and_decoder.simple_conv_blocks import StackedConvBlocksDropoutFirst
 from dynamic_network_architectures.building_blocks.helper import get_matching_convtransp
 #from dynamic_network_architectures.building_blocks.residual_encoders import ResidualEncoder
 from nnunetv2.nets.encoder_and_decoder.residual_encoder_dropout import ResidualEncoderDropout
@@ -80,7 +81,7 @@ class UNetDecoderDropout(nn.Module):
             # input features to conv is 2x input_features_skip (concat input_features_skip with transpconv output)
             if skip_dropout_layers is not None and s < n_stages_encoder - skip_dropout_layers:
                 
-                stage = StackedConvBlocks(
+                stage = StackedConvBlocksDropoutFirst(
                     n_conv_per_stage[s-1], encoder.conv_op, 2 * input_features_skip, input_features_skip,
                     encoder.kernel_sizes[-(s + 1)], 1,
                     conv_bias,
