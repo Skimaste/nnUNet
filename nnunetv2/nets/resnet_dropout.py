@@ -1,6 +1,7 @@
 from typing import Union, Type, List, Tuple
 import numpy as np
 import torch
+from torchviz import make_dot
 from dynamic_network_architectures.building_blocks.helper import convert_conv_op_to_dim
 from dynamic_network_architectures.building_blocks.plain_conv_encoder import PlainConvEncoder
 from dynamic_network_architectures.building_blocks.residual import BasicBlockD, BottleneckD
@@ -13,7 +14,7 @@ from dynamic_network_architectures.initialization.weight_init import InitWeights
 from dynamic_network_architectures.initialization.weight_init import init_last_bn_before_add_to_0
 from torch import nn
 from torch.nn.modules.conv import _ConvNd
-from torch.nn.modules.dropout import _DropoutNd
+from torch.nn.modules.dropout import _DropoutNd, Dropout2d, Dropout3d
 # from mamba_ssm import Mamba
 from torch.cuda.amp import autocast
 
@@ -74,4 +75,53 @@ class ResidualEncoderDropoutUNet(nn.Module):
     def initialize(module):
         InitWeights_He(1e-2)(module)
         init_last_bn_before_add_to_0(module)
+def print_model_parameters(model):
+    print(f"{'Module':<50} {'# Parameters':>15}")
+    print("="*65)
+    total_params = 0
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            param_count = param.numel()
+            total_params += param_count
+            print(f"{name:<50} {param_count:>15}")
+    print("="*65)
+    print(f"{'Total':<50} {total_params:>15}")
+
+if __name__ == '__main__':
+    data = torch.rand((1, 3, 128, 160))  # [batch_size, channels, height, width]
+
+
+    model = ResidualEncoderDropoutUNet(
+        input_channels=3,
+        n_stages=3,
+        features_per_stage=[32, 64, 128],
+        conv_op=nn.Conv2d,
+        kernel_sizes=[3, 3, 3],
+        strides=[1, 2, 2],
+        n_blocks_per_stage=[2, 2,  2],
+        num_classes=2,
+        n_conv_per_stage_decoder=[1, 1],
+        conv_bias=True,
+        norm_op=nn.BatchNorm2d,
+        norm_op_kwargs={"eps": 1e-5, "momentum": 0.1},
+        dropout_op=nn.Dropout2d,
+        dropout_op_kwargs={"p": 0.5},
+        nonlin=nn.ReLU,
+        nonlin_kwargs={"inplace": True},
+        skip_dropout_layers=0,
+        deep_supervision=True,
+        block=BasicBlockD,  # or BottleneckD if you want
+        bottleneck_channels=[16, 32, 64],
+        stem_channels=16)
+    # Forward pass (debugging) 3547142, 3547142
+    #model.train()
+    for name, module in model.named_modules():
+        if 'Dropout' in module.__class__.__name__:
+            print(name, module)
+
+    output = model(data)
+
+    #make_dot(output[0], params=dict(model.named_parameters())).render("model_graph", format="png")
+    #print_model_parameters(model)
+
 
