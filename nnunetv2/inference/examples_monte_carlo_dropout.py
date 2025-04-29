@@ -27,16 +27,16 @@ if __name__ == '__main__':
         checkpoint_name='checkpoint_final.pth',
     )
 
-
-    # variant 2, use list of files as inputs. Note how we use nested lists!!!
+    # print(predictor.network)
+    # predict from raw data
     indir = join(nnUNet_raw, 'Dataset003_ImageCAS_split/imagesTs')
     outdir = join(nnUNet_raw, 'Dataset003_ImageCAS_split/imagesTs_predfullres_2')
     predictor.predict_from_files([[join(indir, 'case_0002_0000.nii.gz')],
-                                  [join(indir, 'case_0015_0000.nii.gz')]],
-                                 [join(outdir, 'case_0002.nii.gz'),
-                                  join(outdir, 'case_0015.nii.gz')],
-                                 save_probabilities=True, overwrite=True,
-                                 num_processes_preprocessing=2, num_processes_segmentation_export=2,
-                                 folder_with_segs_from_prev_stage=None, num_parts=1, part_id=0)
+                                [join(indir, 'case_0015_0000.nii.gz')]],
+                                [join(outdir, 'case_0002.nii.gz'),
+                                join(outdir, 'case_0015.nii.gz')],
+                                save_probabilities=True, overwrite=True,
+                                num_processes_preprocessing=2, num_processes_segmentation_export=2,
+                                folder_with_segs_from_prev_stage=None, num_parts=1, part_id=0)
 
    
