@@ -7,7 +7,6 @@ if __name__ == '__main__':
     from nnunetv2.inference.predict_from_raw_data_monte_carlo_dropout import nnUNetPredictorMCDropout
     from nnunetv2.imageio.simpleitk_reader_writer import SimpleITKIO
 
-    # nnUNetv2_predict -d 3 -f 0 -c 3d_lowres -i imagesTs -o imagesTs_predlowres --continue_prediction
 
     # instantiate the nnUNetPredictorMCDropout
     predictor = nnUNetPredictorMCDropout(
@@ -39,4 +38,3 @@ if __name__ == '__main__':
                                 num_processes_preprocessing=2, num_processes_segmentation_export=2,
                                 folder_with_segs_from_prev_stage=None, num_parts=1, part_id=0)
 
-   
