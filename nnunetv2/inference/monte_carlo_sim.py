@@ -10,9 +10,9 @@ import os
 
 dropout_p = '02' # prob in 10%
 dropout_s = '2'
-nsim = 5
+nsim = 2
 cuda_device = 2
-n_cases = 2
+n_cases = 1
 
 folder = join(nnUNet_raw, 'Dataset003_ImageCAS_split/imagesTs')
 
@@ -20,7 +20,7 @@ cases = [join(folder, f) for f in sorted(os.listdir(folder)) if os.path.isfile(j
 
 print(cases)
 
-'''
+
  # instantiate the nnUNetPredictorMCDropout
 predictor = nnUNetPredictorMCDropout(
     tile_step_size=0.5,
@@ -41,22 +41,26 @@ predictor.initialize_from_trained_model_folder(
 
 
 for case in cases:
-    indir = [[join(nnUNet_raw, f'Dataset003_ImageCAS_split/imagesTs/case_{case}_0000.nii.gz')]]
-    
-    for n in range(nsim):
-        outdir = [join(nnUNet_raw, f'Dataset003_ImageCAS_split/imagesTs/case_{case}/case_{case}_sim_{n}.nii.gz')]
-        output = predictor.predict_from_files(
-            indir,
-            outdir,
-            save_probabilities=True,
-            overwrite=True,
-            num_processes_preprocessing=2,
-            num_processes_segmentation_export=2,
-            folder_with_segs_from_prev_stage=None,
-            num_parts=1,
-            part_id=0)
-    
+    indir = [case]
 
+    #outdir = [join(nnUNet_raw, f'Dataset003_ImageCAS_split/imagesTs/case_{case}/case_{case}_sim_{n}.nii.gz')]
+    #outdir = [join(nnUNet_results, )]
+
+    results = predictor.predict_from_files(
+        [indir for _ in range(n_sim)],
+        None,
+        save_probabilities=True,
+        overwrite=True,
+        num_processes_preprocessing=2,
+        num_processes_segmentation_export=2,
+        folder_with_segs_from_prev_stage=None,
+        num_parts=1,
+        part_id=0)
+
+    print(results)
+    print(type(results))
+    
+    '''
     npz_files = [join(nnUNet_raw, f'Dataset003_ImageCAS_split/imagesTs_predfullres/case_{case}_sim_{n}.npz') for n in range(nsim)]
 
      # Load data from each file
@@ -78,5 +82,6 @@ for case in cases:
     #for f in npz_files:
         #os.remove(f)
 
+    '''
 
-'''
+
