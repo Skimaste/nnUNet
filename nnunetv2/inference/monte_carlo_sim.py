@@ -5,18 +5,22 @@ from nnunetv2.inference.predict_from_raw_data_monte_carlo_dropout import nnUNetP
 from nnunetv2.imageio.simpleitk_reader_writer import SimpleITKIO
 import numpy as np
 import os
+import shutil
+import nibabel as nib
 
  # nnUNetv2_predict -d 3 -f 0 -c 3d_lowres -i imagesTs -o imagesTs_predlowres --continue_prediction
 
 dropout_p = '02' # prob in 10%
 dropout_s = '2'
-nsim = 2
+n_sim = 3
 cuda_device = 2
 n_cases = 1
 
 folder = join(nnUNet_raw, 'Dataset003_ImageCAS_split/imagesTs')
 
-cases = [join(folder, f) for f in sorted(os.listdir(folder)) if os.path.isfile(join(folder, f))][:n_cases] # ['0002', '0015']
+cases = [os.path.splitext(f)[0].split('_')[1] for f in sorted(os.listdir(folder)) if os.path.isfile(join(folder, f))][:n_cases]
+
+# cases = [join(folder, f) for f in sorted(os.listdir(folder)) if os.path.isfile(join(folder, f))][:n_cases] # ['0002', '0015']
 
 print(cases)
 
@@ -41,14 +45,18 @@ predictor.initialize_from_trained_model_folder(
 
 
 for case in cases:
-    indir = [case]
+    indir = [join(folder, f'case_{case}_0000.nii.gz')]
+    indirs = [indir for _ in range(n_sim)]
 
     #outdir = [join(nnUNet_raw, f'Dataset003_ImageCAS_split/imagesTs/case_{case}/case_{case}_sim_{n}.nii.gz')]
-    #outdir = [join(nnUNet_results, )]
+    temp_outdir = [join(nnUNet_results, f'Dataset003_ImageCAS_split/temp')]
+    temp_outdirs = [join(temp_outdir, f'sim_{i}.nii.gz' for i in range(n_sim))]
 
-    results = predictor.predict_from_files(
-        [indir for _ in range(n_sim)],
-        None,
+    outdir = join(nnUNet_results, f'Dataset003_ImageCAS_split/case_{case}')
+
+    predictor.predict_from_files(
+        indirs,
+        temp_outdirs,
         save_probabilities=True,
         overwrite=True,
         num_processes_preprocessing=2,
@@ -57,11 +65,8 @@ for case in cases:
         num_parts=1,
         part_id=0)
 
-    print(results)
-    print(type(results))
-    
-    '''
-    npz_files = [join(nnUNet_raw, f'Dataset003_ImageCAS_split/imagesTs_predfullres/case_{case}_sim_{n}.npz') for n in range(nsim)]
+    # npz_files = [join(nnUNet_raw, f'Dataset003_ImageCAS_split/imagesTs_predfullres/case_{case}_sim_{n}.npz') for n in range(nsim)]
+    npz_files = [join(temp_outdir, f'sim_{i}.npz' for i in range(n_sim))]
 
      # Load data from each file
     loaded_data = [np.load(f) for f in npz_files]
@@ -71,17 +76,36 @@ for case in cases:
 
      # Concatenate along a new dimension (e.g., axis=0)
     concatenated_data = {
-        key: np.stack([data[key] for data in loaded_data], axis=0)
+        key: np.stack([data[key].astype(np.float32) for data in loaded_data], axis=0)
         for key in keys
     }
 
      # Save the concatenated result to a new file
-    np.savez(join(nnUNet_raw, f'Dataset003_ImageCAS_split/imagesTs_predfullres/case_{case}_merged.npz'), **concatenated_data)
+    np.savez_compressed(join(outdir, f'case_{case}_merged.npz'), **concatenated_data, stacked=stacked)
 
      # Optional: remove original files
-    #for f in npz_files:
-        #os.remove(f)
+    # for f in npz_files:
+        # os.remove(f)
+    shutil.rmtree(temp_outdir)
 
-    '''
+
+
+    # calc var-uncertainty and mean
+
+    data = np.load(join(outdir, f'case_{case}_merged.npz'))
+
+    data = data[data.files[0]][:, 1, :, :, :]
+
+    data_var = np.var(data, axis = 0)
+    data_mean = np.mean(data, axis = 0)
+
+    affine = nib.load(indir*).affine
+
+    nib.Nifti1Image(data_var, affine).to_filename(join(outdir, f'case_{case}_var.nii.gz'))
+    nib.Nifti1Image(data_mean, affine).to_filename(join(outdir, f'case_{case}_mean.nii.gz'))
+
+
+
+    
 
 
