@@ -16,6 +16,34 @@ if __name__ == "__main__":
     cuda_device = 2
     n_cases = 1
 
+    def binary_entropy(p, eps=1e-8):
+        p = np.clip(p, eps, 1 - eps)
+        return -p * np.log(p) - (1 - p) * np.log(1 - p)
+
+    def compute_uncertainty(mc_preds):
+        """
+        mc_preds: np.ndarray of shape (T, Z, Y, X) with probabilities
+        Returns:
+            predictive_entropy: np.ndarray of shape (Z, Y, X)
+            mutual_information: np.ndarray of shape (Z, Y, X)
+        """
+        # Predictive mean
+        p_mean = np.mean(mc_preds, axis=0)  # shape: (Z, Y, X)
+        
+        # Entropy of the predictive mean (total uncertainty)
+        predictive_entropy = binary_entropy(p_mean)
+        
+        # Entropy of each MC sample
+        entropies = binary_entropy(mc_preds)  # shape: (T, Z, Y, X)
+        
+        # Expected entropy (aleatoric uncertainty)
+        expected_entropy = np.mean(entropies, axis=0)  # shape: (Z, Y, X)
+        
+        # Mutual Information (epistemic uncertainty)
+        mutual_information = predictive_entropy - expected_entropy
+        
+        return predictive_entropy, mutual_information
+
     folder = join(nnUNet_raw, 'Dataset003_ImageCAS_split/imagesTs')
 
     cases = [os.path.splitext(f)[0].split('_')[1] for f in sorted(os.listdir(folder)) if os.path.isfile(join(folder, f))][:n_cases]
@@ -89,10 +117,14 @@ if __name__ == "__main__":
         data_var = np.var(data, axis = 0)
         data_mean = np.mean(data, axis = 0)
 
+        data_pred_entropy, data_mutual_info = compute_uncertainty(data)
+
         affine = nib.load(indir[0]).affine
 
         nib.Nifti1Image(data_var, affine).to_filename(join(outdir, f'case_{case}_var.nii.gz'))
         nib.Nifti1Image(data_mean, affine).to_filename(join(outdir, f'case_{case}_mean.nii.gz'))
+        nib.Nifti1Image(data_pred_entropy, affine).to_filename(join(outdir, f'case_{case}_pred_entropy.nii.gz'))
+        nib.Nifti1Image(data_mutual_info, affine).to_filename(join(outdir, f'case_{case}_mutual_info.nii.gz'))
 
 
 
