@@ -12,7 +12,7 @@ import nibabel as nib
 if __name__ == "__main__":
     dropout_p = '02' # prob in 10%
     dropout_s = '2'
-    n_sim = 3
+    n_sim = 5
     cuda_device = 2
     n_cases = 1
 
@@ -60,8 +60,15 @@ if __name__ == "__main__":
         allow_tqdm=True
     )
     # initializes the network architecture, loads the checkpoint
+    '''
     predictor.initialize_from_trained_model_folder(
         join(nnUNet_results, f'Dataset003_ImageCAS_split/nnUNetTrainerDropout__p{dropout_p}_s{dropout_s}__3d_fullres'),
+        use_folds=(0,),
+        checkpoint_name='checkpoint_final.pth',
+    )'''
+
+    predictor.initialize_from_trained_model_folder(
+        join('/mnt/processing/oswald/nnUNet_results', f'Dataset003_ImageCAS_split/nnUNetTrainerDropout__p{dropout_p}_s{dropout_s}__3d_fullres'),
         use_folds=(0,),
         checkpoint_name='checkpoint_final.pth',
     )
