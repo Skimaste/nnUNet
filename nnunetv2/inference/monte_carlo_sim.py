@@ -67,6 +67,7 @@ if __name__ == "__main__":
         checkpoint_name='checkpoint_final.pth',
     )'''
 
+    print('Loading model...')
     predictor.initialize_from_trained_model_folder(
         join('/mnt/processing/oswald/nnUNet_results', f'Dataset003_ImageCAS_split/nnUNetTrainerDropout__p{dropout_p}_s{dropout_s}__3d_fullres'),
         use_folds=(0,),
@@ -82,8 +83,12 @@ if __name__ == "__main__":
         temp_outdir = join(nnUNet_results, f'Dataset003_ImageCAS_split/temp')
         temp_outdirs = [join(temp_outdir, f'sim_{i}.nii.gz') for i in range(n_sim)]
 
-        outdir = join(nnUNet_results, f'Dataset003_ImageCAS_split/case_{case}')
+        print('making output directories')
+        outdir = join(nnUNet_results, f'Dataset003_ImageCAS_split/mc_n{n_sim}_p{dropout_p}_s{dropout_s}/case_{case}')
+        os.makedirs(outdir, exist_ok=True)
+        # os.makedirs(temp_outdir, exist_ok=True)
 
+        ''' # run the prediction
         predictor.predict_from_files(
             indirs,
             temp_outdirs,
@@ -94,9 +99,11 @@ if __name__ == "__main__":
             folder_with_segs_from_prev_stage=None,
             num_parts=1,
             part_id=0)
+        '''
+
 
         # npz_files = [join(nnUNet_raw, f'Dataset003_ImageCAS_split/imagesTs_predfullres/case_{case}_sim_{n}.npz') for n in range(nsim)]
-        npz_files = [join(temp_outdir, f'sim_{i}.npz') for i in range(n_sim)]
+        npz_files = [join(temp_outdir, f'sim_{i}.nii.gz.npz') for i in range(n_sim)]
 
         # Load data from each file
         loaded_data = [np.load(f) for f in npz_files]
@@ -111,9 +118,12 @@ if __name__ == "__main__":
         }
 
         # Save the concatenated result to a new file
+        print(f"Saving concatenated data to {join(outdir, f'case_{case}_merged.npz')}")
         np.savez_compressed(join(outdir, f'case_{case}_merged.npz'), **concatenated_data)
         
+        print(f"Deleting temporary files in {temp_outdir}")
         shutil.rmtree(temp_outdir)
+
 
         # calc var-uncertainty and mean
 
