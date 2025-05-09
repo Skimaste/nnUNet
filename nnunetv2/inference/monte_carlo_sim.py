@@ -16,33 +16,105 @@ if __name__ == "__main__":
     cuda_device = 2
     n_cases = 1
 
-    def binary_entropy(p, eps=1e-8):
-        p = np.clip(p, eps, 1 - eps)
-        return -p * np.log(p) - (1 - p) * np.log(1 - p)
+    ''' # numpy
+    def categorical_entropy(p, eps=1e-8):
+        """Compute entropy for multi-class probabilities."""
+        p = np.clip(p, eps, 1.0)
+        return -np.sum(p * np.log(p), axis=0)  # sum over class dimension
+    '''
 
-    def compute_uncertainty(mc_preds):
+    # pytorch
+    def categorical_entropy(p, eps=1e-8):
+        """Compute entropy for multi-class probabilities."""
+        p = p.clamp(min=eps)
+        return -(p * p.log()).sum(dim=0)
+    
+
+    '''# numpy
+    def compute_multiclass_uncertainty(mc_preds):
         """
-        mc_preds: np.ndarray of shape (T, Z, Y, X) with probabilities
+        mc_preds: np.ndarray of shape (T, C, Z, Y, X) with softmax probabilities
         Returns:
-            predictive_entropy: np.ndarray of shape (Z, Y, X)
+            shannon_entropy: np.ndarray of shape (Z, Y, X)
             mutual_information: np.ndarray of shape (Z, Y, X)
         """
-        # Predictive mean
-        p_mean = np.mean(mc_preds, axis=0)  # shape: (Z, Y, X)
+        # Mean over MC samples -> shape: (C, Z, Y, X)
+        p_mean = np.mean(mc_preds, axis=0)
         
-        # Entropy of the predictive mean (total uncertainty)
-        predictive_entropy = binary_entropy(p_mean)
+        # Predictive entropy: H(p_mean), shape: (Z, Y, X)
+        shannon_entropy = categorical_entropy(p_mean)
         
-        # Entropy of each MC sample
-        entropies = binary_entropy(mc_preds)  # shape: (T, Z, Y, X)
+        # Entropy per sample: H(p_t), shape: (T, Z, Y, X)
+        entropies = np.array([categorical_entropy(mc_preds[t, :, :, :, :]) for t in range(mc_preds.shape[0])])
         
-        # Expected entropy (aleatoric uncertainty)
-        expected_entropy = np.mean(entropies, axis=0)  # shape: (Z, Y, X)
+        # Expected entropy: mean over MC samples
+        expected_entropy = np.mean(entropies, axis=0)
         
-        # Mutual Information (epistemic uncertainty)
-        mutual_information = predictive_entropy - expected_entropy
+        # Mutual Information
+        mutual_information = shannon_entropy - expected_entropy
         
-        return predictive_entropy, mutual_information
+        return shannon_entropy, expected_entropy, mutual_information
+    '''
+        
+    # pytorch
+    def compute_multiclass_uncertainty(mc_preds, eps=1e-8):
+        """
+        mc_preds: Tensor of shape (T, C, Z, Y, X)
+        Returns:
+            shannon_entropy: Tensor of shape (Z, Y, X)
+            expected_entropy: Tensor of shape (Z, Y, X)
+            mutual_info: Tensor of shape (Z, Y, X)
+        """
+        mean_pred = mc_preds.mean(dim=0)  # (C, Z, Y, X)
+        shannon_entropy = categorical_entropy(mean_pred, eps)
+
+        entropies = -(mc_preds.clamp(min=eps) * mc_preds.clamp(min=eps).log()).sum(dim=1)  # (T, Z, Y, X)
+        expected_entropy = entropies.mean(dim=0)  # (Z, Y, X)
+
+        mutual_info = shannon_entropy - expected_entropy
+        return shannon_entropy, expected_entropy, mutual_info
+    
+    '''# numpy
+    def compute_multiclass_variance(mc_preds, reduce='mean'):
+        """
+        mc_preds: np.ndarray of shape (T, C, Z, Y, X)
+        reduce: 'mean' or 'max' to reduce per-class variance to voxel level
+        Returns:
+            voxel_variance: np.ndarray of shape (Z, Y, X)
+        """
+        # Compute variance across MC samples → shape: (C, Z, Y, X)
+        var_across_mc = np.var(mc_preds, axis=0)  # variance over T
+
+        if reduce == 'mean':
+            voxel_variance = np.mean(var_across_mc, axis=0)  # average over classes
+        elif reduce == 'max':
+            voxel_variance = np.max(var_across_mc, axis=0)   # max over classes
+        else:
+            raise ValueError("reduce must be 'mean' or 'max'")
+        
+        return voxel_variance
+    '''
+
+    # pytorch
+    def compute_multiclass_variance(mc_preds, reduce='mean'):
+        """
+        mc_preds: Tensor of shape (T, C, Z, Y, X)
+        reduce: 'mean' or 'max' to aggregate class-wise variance
+        Returns:
+            voxel_variance: Tensor of shape (Z, Y, X)
+        """
+        var_across_mc = mc_preds.var(dim=0)  # (C, Z, Y, X)
+
+        if reduce == 'mean':
+            voxel_variance = var_across_mc.mean(dim=0)  # (Z, Y, X)
+        elif reduce == 'max':
+            voxel_variance = var_across_mc.max(dim=0).values  # (Z, Y, X)
+        else:
+            raise ValueError("reduce must be 'mean' or 'max'")
+
+        return voxel_variance
+
+
 
     folder = join(nnUNet_raw, 'Dataset003_ImageCAS_split/imagesTs')
 
@@ -50,7 +122,7 @@ if __name__ == "__main__":
 
     # instantiate the nnUNetPredictorMCDropout
     predictor = nnUNetPredictorMCDropout(
-        tile_step_size=0.5,
+        tile_step_size=0.5, # can change this for speedup, but then we need to turn off gaussian noise if we choose 1
         use_gaussian=True,
         use_mirroring=True,
         perform_everything_on_device=True,
@@ -88,7 +160,9 @@ if __name__ == "__main__":
         os.makedirs(outdir, exist_ok=True)
         # os.makedirs(temp_outdir, exist_ok=True)
 
-        ''' # run the prediction
+
+        # run the prediction
+        print(f"Predicting case {case} with {n_sim} simulations")
         predictor.predict_from_files(
             indirs,
             temp_outdirs,
@@ -99,9 +173,9 @@ if __name__ == "__main__":
             folder_with_segs_from_prev_stage=None,
             num_parts=1,
             part_id=0)
-        '''
+        
 
-
+        
         # npz_files = [join(nnUNet_raw, f'Dataset003_ImageCAS_split/imagesTs_predfullres/case_{case}_sim_{n}.npz') for n in range(nsim)]
         npz_files = [join(temp_outdir, f'sim_{i}.nii.gz.npz') for i in range(n_sim)]
 
@@ -113,7 +187,7 @@ if __name__ == "__main__":
 
         # Concatenate along a new dimension (e.g., axis=0)
         concatenated_data = {
-            key: np.stack([data[key].astype(np.float32) for data in loaded_data], axis=0)
+            key: np.stack([data[key].astype(np.float16) for data in loaded_data], axis=0)
             for key in keys
         }
 
@@ -124,25 +198,48 @@ if __name__ == "__main__":
         print(f"Deleting temporary files in {temp_outdir}")
         shutil.rmtree(temp_outdir)
 
-
+        
         # calc var-uncertainty and mean
 
         data = np.load(join(outdir, f'case_{case}_merged.npz'))
 
-        data = data[data.files[0]][:, 1, :, :, :]
+        data = data[data.files[0]][:, :, :, :, :] # shape (mc, class, xyz)
+        print(f"data shape: {data.shape}, dim: {data.ndim}")
+        data = np.transpose(data, (0, 1, 4, 3, 2))
+        print(f"data shape: {data.shape}, dim: {data.ndim}")
 
-        data_var = np.var(data, axis = 0)
-        data_mean = np.mean(data, axis = 0)
+        data = torch.from_numpy(data).half().cuda(cuda_device)
 
-        data_pred_entropy, data_mutual_info = compute_uncertainty(data)
+        data_var = compute_multiclass_variance(data, reduce='mean')
+        data_mean = data.mean(dim=0) # !!! this only saves the foreground class, can be changed to save all classes, but then wont work as viewable segmentation
+
+        data_shannon_entropy, data_expected_entropy, data_mutual_info = compute_multiclass_uncertainty(data)
+
+        
+        print(f"data_var shape: {data_var.shape}, dim: {data_var.ndim}")
+        print(f"data_mean shape: {data_mean.shape}, dim: {data_mean.ndim}")
+        print(f"data_shannon_entropy shape: {data_shannon_entropy.shape}, dim: {data_shannon_entropy.ndim}")
+        print(f"data_expected_entropy shape: {data_expected_entropy.shape}, dim: {data_expected_entropy.ndim}")
+        print(f"data_mutual_info shape: {data_mutual_info.shape}, dim: {data_mutual_info.ndim}")
+
+
+        # print(data_mean.sum(dim=0).max())
 
         affine = nib.load(indir[0]).affine
 
+        # Save the data as NIfTI files
+        data_var = data_var.cpu().numpy().astype(np.float32)
+        data_mean = data_mean.cpu().numpy().astype(np.float32)
+        data_shannon_entropy = data_shannon_entropy.cpu().numpy().astype(np.float32)
+        data_expected_entropy = data_expected_entropy.cpu().numpy().astype(np.float32)
+        data_mutual_info = data_mutual_info.cpu().numpy().astype(np.float32)
+
         nib.Nifti1Image(data_var, affine).to_filename(join(outdir, f'case_{case}_var.nii.gz'))
         nib.Nifti1Image(data_mean, affine).to_filename(join(outdir, f'case_{case}_mean.nii.gz'))
-        nib.Nifti1Image(data_pred_entropy, affine).to_filename(join(outdir, f'case_{case}_pred_entropy.nii.gz'))
+        nib.Nifti1Image(data_shannon_entropy, affine).to_filename(join(outdir, f'case_{case}_shannon_entropy.nii.gz'))
+        nib.Nifti1Image(data_expected_entropy, affine).to_filename(join(outdir, f'case_{case}_expected_entropy.nii.gz'))
         nib.Nifti1Image(data_mutual_info, affine).to_filename(join(outdir, f'case_{case}_mutual_info.nii.gz'))
-
+        print(f"Finished processing case {case}")
 
 
 
