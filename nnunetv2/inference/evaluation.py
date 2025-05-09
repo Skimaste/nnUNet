@@ -18,8 +18,7 @@ uncertainty_map = nib.load(file_path_unc).get_fdata()
 ground_truth = nib.load(file_path_gt).get_fdata()
 #print("Shape:", ground_truth.shape)
 
-print(np.min(probabibilty_map), np.max(probabibilty_map))
-
+# Change for multicalss implementation and multiple threads
 
 def evaluate(probabibilty_map, uncertainty_map, ground_truth, threshold=0.5, bins=10):
 
@@ -36,15 +35,23 @@ def evaluate(probabibilty_map, uncertainty_map, ground_truth, threshold=0.5, bin
     euce = 0.0
 
     bin_edges = np.linspace(0, 1, bins + 1)
-    for i in range(bins):
+    for i in range(bins): 
         bin_lower = bin_edges[i]
         bin_upper = bin_edges[i + 1]
 
         mask = (prob >= bin_lower) & (prob < bin_upper)
+
         if np.any(mask):
             bin_acc = np.mean(correct[mask])
-            bin_conf = np.mean(prob[mask])
+            if bin_upper <= threshold:
+                bin_conf = 1-np.mean(prob[mask])
+            else:
+                bin_conf = np.mean(prob[mask])
             ece += (np.sum(mask) / len(prob)) * np.abs(bin_acc - bin_conf)
+            print(f'Bin{i} sum mask: {np.sum(mask)}')
+            print(f'Bin{i} len prob: {np.sum(len(prob))}')
+            print(f'Bin{i} bin acc: {bin_acc}')
+            print(f'Bin{i} bin conf: {bin_conf}')
 
     for i in range(bins):
         bin_lower = bin_edges[i]
@@ -61,11 +68,11 @@ def evaluate(probabibilty_map, uncertainty_map, ground_truth, threshold=0.5, bin
         bin_upper = bin_edges[i + 1]
         mask = (prob >= bin_lower) & (prob < bin_upper)
         print(f"Bin {i}: {np.sum(mask)} samples")
-        
+
     return ece, euce
 
 ece, euce = evaluate(probabibilty_map, uncertainty_map, ground_truth, threshold=0.5, bins=10)
-#print("ECE:", ece)
-#print("EUCE:", euce)
+print("ECE:", ece)
+print("EUCE:", euce)
 
   
