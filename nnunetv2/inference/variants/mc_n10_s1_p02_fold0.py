@@ -17,9 +17,9 @@ import datetime # for converting seconds to hours, minutes, seconds
 
 if __name__ == "__main__":
     dropout_p = '02' # prob in 10%
-    dropout_s = '2'
-    n_sim = 5
-    cuda_device = 2
+    dropout_s = '1'
+    n_sim = 10
+    cuda_device = 1
     n_cases = 20
     folds = (0,)
 
