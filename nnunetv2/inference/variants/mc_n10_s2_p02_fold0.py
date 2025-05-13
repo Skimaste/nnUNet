@@ -167,8 +167,9 @@ if __name__ == "__main__":
         indirs = [indir for _ in range(n_sim)]
 
         #outdir = [join(nnUNet_raw, f'Dataset003_ImageCAS_split/imagesTs/case_{case}/case_{case}_sim_{n}.nii.gz')]
-        temp_outdir = join(nnUNet_results, f'Dataset003_ImageCAS_split/temp')
+        temp_outdir = join(nnUNet_results, f'Dataset003_ImageCAS_split/temp/gpu_{cuda_device}_mc_n{n_sim}_p{dropout_p}_s{dropout_s}')
         temp_outdirs = [join(temp_outdir, f'sim_{i}.nii.gz') for i in range(n_sim)]
+        os.makedirs(temp_outdir, exist_ok=True)
 
         print('making output directories')
         outdir = join(nnUNet_results, f'Dataset003_ImageCAS_split/mc_n{n_sim}_p{dropout_p}_s{dropout_s}/case_{case}')
