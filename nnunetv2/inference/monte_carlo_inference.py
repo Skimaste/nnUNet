@@ -181,6 +181,8 @@ class MonteCarloInference:
         # data = np.transpose(data, (2, 3, 4, 0, 1))
         # data = np.squeeze(data)
 
+        os.makedirs(join(outdir, case), exist_ok=True)
+
         affine = nib.load(join(self.indir, f'case_{case}_0000.nii.gz')).affine
 
         img = nib.Nifti1Image(data, affine=affine)
