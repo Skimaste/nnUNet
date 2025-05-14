@@ -58,7 +58,7 @@ class MonteCarloInference:
             mutual_info: Tensor of shape (Z, Y, X)
         """
         mean_pred = mc_preds.mean(dim=0)  # (C, Z, Y, X)
-        shannon_entropy = self.categorical_entropy(self, mean_pred, eps)
+        shannon_entropy = self.categorical_entropy(mean_pred, eps)
 
         entropies = -(mc_preds.clamp(min=eps) * mc_preds.clamp(min=eps).log()).sum(dim=1)  # (T, Z, Y, X)
         expected_entropy = entropies.mean(dim=0)  # (Z, Y, X)
