@@ -105,11 +105,11 @@ class MonteCarloInference:
             verbose_preprocessing=False,
             allow_tqdm=True
         )
-    
+
         predictor.initialize_from_trained_model_folder(
-            self.model_path,
+            join('/mnt/processing/oswald/nnUNet_results', f'Dataset003_ImageCAS_split/nnUNetTrainerDropout__p05_s2__3d_fullres'), # self.model_path
             use_folds=self.folds,
-            checkpoint_name='checkpoint_best.pth',
+            checkpoint_name='checkpoint_final.pth',
         )
 
         cases = [os.path.splitext(f)[0].split('_')[1] for f in sorted(os.listdir(self.indir)) if os.path.isfile(join(self.indir, f))][:self.n_cases]
@@ -120,7 +120,7 @@ class MonteCarloInference:
 
             temp_outdir = join(self.outdir, f'temp/gpu_{self.cuda_device}')
             os.makedirs(temp_outdir, exist_ok=True)
-            temp_outdirs = [join(temp_outdir, f'sim{i}.nii.gz') for i in range(self.n_sim)]
+            temp_outdirs = [join(temp_outdir, f'sim_{i}.nii.gz') for i in range(self.n_sim)]
 
             predictor.predict_from_files(
                 folder_sim,
