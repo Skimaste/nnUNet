@@ -25,8 +25,8 @@ class MonteCarloInference:
                  ):
         self.dataset_name = dataset_name
         self.indir = join(nnUNet_raw, dataset_name, 'imagesTs')
-        self.outdir = join(nnUNet_results, dataset_name)
-        self.model_path = join(self.outdir, model)
+        self.model_path = join(nnUNet_results, dataset_name, model)
+        self.outdir = join(self.model_path, 'inference')
         self.n_sim = n_sim
         self.folds = folds
         self.n_cases = n_cases
