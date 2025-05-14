@@ -10,33 +10,42 @@ import nibabel as nib
 
 import datetime # for converting seconds to hours, minutes, seconds
 
- # nnUNetv2_predict -d 3 -f 0 -c 3d_lowres -i imagesTs -o imagesTs_predlowres --continue_prediction
 
 
 
+class MC_Inference:
+    def __init__(self,
+                 dropout_p,
+                 dropout_s,
+                 n_sim,
+                 folds,
+                 n_cases,
+                 cuda_device,
+                 shannon_entropy = True,
+                 expected_entropy = True,
+                 mutual_info = True,
+                 variance = True,
+                 mean = True
+                 ):
+        self.dropout_p = dropout_p
+        self.dropout_s = dropout_s
+        self.n_sim = n_sim
+        self.folds = folds
+        self.n_cases = n_cases
+        self.cuda_device = cuda_device
+        self.shannon_entropy = shannon_entropy
+        self.expected_entropy = expected_entropy
+        self.mutual_info = mutual_info
+        self.variance = variance
+        self.mean = mean
 
-if __name__ == "__main__":
-    dropout_p = '02' # prob in 10%
-    dropout_s = '2'
-    n_sim = 5
-    cuda_device = 2
-    n_cases = 20
-    folds = (0,)
+        time_for_one_case_s = 70 # in seconds # depends on image size, tile_step_size
+        time_s = n_cases * n_sim * len(folds) * time_for_one_case_s * 1.1 # 10% more time for overhead
+        time = str(datetime.timedelta(seconds=time_s))
 
-    # time estimation
-    time_for_one_case_s = 70 # in seconds # depends on image size, tile_step_size
-    time_s = n_cases * n_sim * len(folds) * time_for_one_case_s * 1.1 # 10% more time for overhead
-    time = str(datetime.timedelta(seconds=time_s))
-    print(f"Estimated time for {n_cases} cases with {n_sim} simulations and folds {folds}: {time}")
+        self.time_estimation = time
+        print(f"Estimated time for {n_cases} cases with {n_sim} simulations and folds {folds}: {time}")
 
-
-
-    ''' # numpy
-    def categorical_entropy(p, eps=1e-8):
-        """Compute entropy for multi-class probabilities."""
-        p = np.clip(p, eps, 1.0)
-        return -np.sum(p * np.log(p), axis=0)  # sum over class dimension
-    '''
 
     # pytorch
     def categorical_entropy(p, eps=1e-8):
@@ -44,35 +53,9 @@ if __name__ == "__main__":
         p = p.clamp(min=eps)
         return -(p * p.log()).sum(dim=0)
     
-
-    '''# numpy
-    def compute_multiclass_uncertainty(mc_preds):
-        """
-        mc_preds: np.ndarray of shape (T, C, Z, Y, X) with softmax probabilities
-        Returns:
-            shannon_entropy: np.ndarray of shape (Z, Y, X)
-            mutual_information: np.ndarray of shape (Z, Y, X)
-        """
-        # Mean over MC samples -> shape: (C, Z, Y, X)
-        p_mean = np.mean(mc_preds, axis=0)
-        
-        # Predictive entropy: H(p_mean), shape: (Z, Y, X)
-        shannon_entropy = categorical_entropy(p_mean)
-        
-        # Entropy per sample: H(p_t), shape: (T, Z, Y, X)
-        entropies = np.array([categorical_entropy(mc_preds[t, :, :, :, :]) for t in range(mc_preds.shape[0])])
-        
-        # Expected entropy: mean over MC samples
-        expected_entropy = np.mean(entropies, axis=0)
-        
-        # Mutual Information
-        mutual_information = shannon_entropy - expected_entropy
-        
-        return shannon_entropy, expected_entropy, mutual_information
-    '''
         
     # pytorch
-    def compute_multiclass_uncertainty(mc_preds, eps=1e-8):
+    def compute_multiclass_uncertainty(self, mc_preds, eps=1e-8):
         """
         mc_preds: Tensor of shape (T, C, Z, Y, X)
         Returns:
@@ -81,34 +64,13 @@ if __name__ == "__main__":
             mutual_info: Tensor of shape (Z, Y, X)
         """
         mean_pred = mc_preds.mean(dim=0)  # (C, Z, Y, X)
-        shannon_entropy = categorical_entropy(mean_pred, eps)
+        shannon_entropy = self.categorical_entropy(mean_pred, eps)
 
         entropies = -(mc_preds.clamp(min=eps) * mc_preds.clamp(min=eps).log()).sum(dim=1)  # (T, Z, Y, X)
         expected_entropy = entropies.mean(dim=0)  # (Z, Y, X)
 
         mutual_info = shannon_entropy - expected_entropy
         return shannon_entropy, expected_entropy, mutual_info
-    
-    '''# numpy
-    def compute_multiclass_variance(mc_preds, reduce='mean'):
-        """
-        mc_preds: np.ndarray of shape (T, C, Z, Y, X)
-        reduce: 'mean' or 'max' to reduce per-class variance to voxel level
-        Returns:
-            voxel_variance: np.ndarray of shape (Z, Y, X)
-        """
-        # Compute variance across MC samples → shape: (C, Z, Y, X)
-        var_across_mc = np.var(mc_preds, axis=0)  # variance over T
-
-        if reduce == 'mean':
-            voxel_variance = np.mean(var_across_mc, axis=0)  # average over classes
-        elif reduce == 'max':
-            voxel_variance = np.max(var_across_mc, axis=0)   # max over classes
-        else:
-            raise ValueError("reduce must be 'mean' or 'max'")
-        
-        return voxel_variance
-    '''
 
     # pytorch
     def compute_multiclass_variance(mc_preds, reduce='mean'):
