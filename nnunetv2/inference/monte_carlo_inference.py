@@ -43,7 +43,7 @@ class MonteCarloInference:
         print(f"Estimated time for {n_cases} cases with {n_sim} simulations and folds {folds}: {time}")
 
 
-    def categorical_entropy(p, eps=1e-8):
+    def categorical_entropy(self, p, eps=1e-8):
         """Compute entropy for multi-class probabilities."""
         p = p.clamp(min=eps)
         return -(p * p.log()).sum(dim=0)
@@ -58,7 +58,7 @@ class MonteCarloInference:
             mutual_info: Tensor of shape (Z, Y, X)
         """
         mean_pred = mc_preds.mean(dim=0)  # (C, Z, Y, X)
-        shannon_entropy = self.categorical_entropy(mean_pred, eps)
+        shannon_entropy = self.categorical_entropy(self, mean_pred, eps)
 
         entropies = -(mc_preds.clamp(min=eps) * mc_preds.clamp(min=eps).log()).sum(dim=1)  # (T, Z, Y, X)
         expected_entropy = entropies.mean(dim=0)  # (Z, Y, X)
@@ -67,7 +67,7 @@ class MonteCarloInference:
         return shannon_entropy, expected_entropy, mutual_info
 
 
-    def compute_multiclass_variance(mc_preds, reduce='mean'):
+    def compute_multiclass_variance(self, mc_preds, reduce='mean'):
         """
         mc_preds: Tensor of shape (T, C, Z, Y, X)
         reduce: 'mean' or 'max' to aggregate class-wise variance
@@ -85,7 +85,7 @@ class MonteCarloInference:
 
         return voxel_variance
     
-    def compute_multiclass_mean(mc_preds):
+    def compute_multiclass_mean(self, mc_preds):
         """
         mc_preds: Tensor of shape (T, C, Z, Y, X)
         Returns:
@@ -168,7 +168,7 @@ class MonteCarloInference:
             if self.mean:
                 voxel_mean = self.compute_multiclass_mean(data)
                 self.save_image(voxel_mean, self.outdir, case, 'mean')
-            if self.shannon_entropy:
+            if self.entropy:
                 shannon_entropy, expected_entropy, mutual_info = self.compute_multiclass_uncertainty(data)
                 self.save_image(shannon_entropy, self.outdir, case, 'shannon_entropy')
                 self.save_image(expected_entropy, self.outdir, case, 'expected_entropy')
@@ -177,7 +177,7 @@ class MonteCarloInference:
 
     def save_image(self, data, outdir, case, metric):
         # Save the uncertainty metric as a NIfTI file
-        data = data.cpu().numpy()
+        data = data.cpu().numpy().astype(np.float32)
         # data = np.transpose(data, (2, 3, 4, 0, 1))
         # data = np.squeeze(data)
 
@@ -203,4 +203,5 @@ if __name__ == "__main__":
         entropy=True
     )
 
-    mc_inference.run()
+    # mc_inference.run()
+    mc_inference.compute_uncertainty()
