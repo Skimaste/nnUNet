@@ -144,7 +144,7 @@ class MonteCarloInference:
                 for key in keys
             }
 
-            np.savez_compressed(join(self.outdir, f'case_{case}_merged.npz'), **concatenated_data)
+            np.savez_compressed(join(self.outdir, f'{case}/case_{case}_merged.npz'), **concatenated_data)
 
             shutil.rmtree(temp_outdir)
 
@@ -153,7 +153,7 @@ class MonteCarloInference:
         cases = [os.path.splitext(f)[0].split('_')[1] for f in sorted(os.listdir(self.indir)) if os.path.isfile(join(self.indir, f))][:self.n_cases]
 
         for case in cases:
-            data = np.load(join(self.outdir, f'case_{case}_merged.npz'))
+            data = np.load(join(self.outdir, f'{case}/case_{case}_merged.npz'))
 
             data = data[data.files[0]][:, :, :, :, :]
 
@@ -184,7 +184,7 @@ class MonteCarloInference:
         affine = nib.load(join(self.indir, f'case_{case}_0000.nii.gz')).affine
 
         img = nib.Nifti1Image(data, affine=affine)
-        nib.save(img, join(outdir, f'case_{case}_{metric}.nii.gz'))
+        nib.save(img, join(outdir, f'{case}/case_{case}_{metric}.nii.gz'))
 
     def run(self):
         self.run_inference()
