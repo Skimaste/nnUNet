@@ -15,8 +15,9 @@ import datetime # for converting seconds to hours, minutes, seconds
 
 class MC_Inference:
     def __init__(self,
-                 dropout_p,
-                 dropout_s,
+                 indir,
+                 outdir,
+                 model,
                  n_sim,
                  folds,
                  n_cases,
@@ -27,8 +28,9 @@ class MC_Inference:
                  variance = True,
                  mean = True
                  ):
-        self.dropout_p = dropout_p
-        self.dropout_s = dropout_s
+        self.indir = indir
+        self.outdir = outdir
+        self.model = model
         self.n_sim = n_sim
         self.folds = folds
         self.n_cases = n_cases
@@ -93,7 +95,7 @@ class MC_Inference:
 
 
 
-    folder = join(nnUNet_raw, 'Dataset003_ImageCAS_split/imagesTs')
+    folder = self.indir
 
     cases = [os.path.splitext(f)[0].split('_')[1] for f in sorted(os.listdir(folder)) if os.path.isfile(join(folder, f))][:n_cases]
 
