@@ -45,8 +45,13 @@ class MonteCarloInference:
 
     def categorical_entropy(self, p, eps=1e-8):
         """Compute entropy for multi-class probabilities."""
-        p = p.clamp(min=eps)
+        p = p.clamp(min=eps, max=1-eps)  # Avoid log(0)
         return -(p * p.log()).sum(dim=0)
+    
+    def categorical_entropy_from_logits(self, logits):
+        log_p = torch.nn.functional.log_softmax(logits, dim=0)
+        p = torch.nn.functional.softmax(logits, dim=0)
+        return -(p * log_p).sum(dim=0)
     
 
     def compute_multiclass_uncertainty(self, mc_preds, eps=1e-8):
@@ -58,7 +63,7 @@ class MonteCarloInference:
             mutual_info: Tensor of shape (Z, Y, X)
         """
         mean_pred = mc_preds.mean(dim=0)  # (C, Z, Y, X)
-        shannon_entropy = self.categorical_entropy(mean_pred, eps)
+        shannon_entropy = self.categorical_entropy_from_logits(mean_pred)
 
         entropies = -(mc_preds.clamp(min=eps) * mc_preds.clamp(min=eps).log()).sum(dim=1)  # (T, Z, Y, X)
         expected_entropy = entropies.mean(dim=0)  # (Z, Y, X)
@@ -144,7 +149,7 @@ class MonteCarloInference:
                 for key in keys
             }
 
-            np.savez_compressed(join(self.outdir, f'{case}/case_{case}_merged.npz'), **concatenated_data)
+            np.savez_compressed(join(self.outdir, f'case_{case}/case_{case}_merged.npz'), **concatenated_data)
 
             shutil.rmtree(temp_outdir)
 
@@ -153,7 +158,7 @@ class MonteCarloInference:
         cases = [os.path.splitext(f)[0].split('_')[1] for f in sorted(os.listdir(self.indir)) if os.path.isfile(join(self.indir, f))][:self.n_cases]
 
         for case in cases:
-            data = np.load(join(self.outdir, f'{case}/case_{case}_merged.npz'))
+            data = np.load(join(self.outdir, f'case_{case}/case_{case}_merged.npz'))
 
             data = data[data.files[0]][:, :, :, :, :]
 
@@ -181,12 +186,12 @@ class MonteCarloInference:
         # data = np.transpose(data, (2, 3, 4, 0, 1))
         # data = np.squeeze(data)
 
-        os.makedirs(join(outdir, case), exist_ok=True)
+        os.makedirs(join(outdir, f'case_{case}'), exist_ok=True)
 
         affine = nib.load(join(self.indir, f'case_{case}_0000.nii.gz')).affine
 
         img = nib.Nifti1Image(data, affine=affine)
-        nib.save(img, join(outdir, f'{case}/case_{case}_{metric}.nii.gz'))
+        nib.save(img, join(outdir, f'case_{case}/case_{case}_{metric}.nii.gz'))
 
     def run(self):
         self.run_inference()
@@ -196,10 +201,10 @@ if __name__ == "__main__":
     mc_inference = MonteCarloInference(
         dataset_name = 'Dataset003_ImageCAS_split',
         model='nnUNetTrainerDropout__p05_s2__3d_fullres',
-        n_cases=2,
-        n_sim=3,
+        n_cases=20,
+        n_sim=10,
         folds=(0,),
-        cuda_device=0,
+        cuda_device=3,
         variance=True,
         mean=True,
         entropy=True
