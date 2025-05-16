@@ -49,8 +49,8 @@ class MonteCarloInference:
         return -(p * p.log()).sum(dim=0)
     
     def categorical_entropy_from_logits(self, logits, dim):
-        log_p = torch.nn.functional.log_softmax(logits, dim=0)
-        p = torch.nn.functional.softmax(logits, dim=0)
+        log_p = torch.nn.functional.log_softmax(logits, dim=dim)
+        p = torch.nn.functional.softmax(logits, dim=dim)
         return -(p * log_p).sum(dim=dim)
 
 
@@ -271,5 +271,5 @@ if __name__ == "__main__":
         entropy=True
     )
 
-    # mc_inference.run()
+    #mc_inference.run()
     mc_inference.compute_uncertainty()
