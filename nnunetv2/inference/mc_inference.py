@@ -1,3 +1,0 @@
-# why have my .npz file containing probabilities exploded from 300 mb to 3 gb when I just stacked five files?
-
-# I have an implementation of nnunet, in which I have implemented Monte Carlo dropout. When I run the inference multiple times to get the different model results (from different dropouts in the model) do I need to reinstantiate the inference module, or does the dropout look different for each picture that gets sent through the inference pipeline?
