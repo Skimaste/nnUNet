@@ -45,14 +45,8 @@ class MonteCarloInference:
 
     def categorical_entropy(self, p, dim, eps):
         """Compute entropy for multi-class probabilities."""
-        p_safe = p.clamp(min=eps)  # Avoid log(0)
-        return -(p_safe * p_safe.log()).sum(dim=dim)
-    
-
-    def categorical_entropy_from_logits(self, logits, dim):
-        log_p = torch.nn.functional.log_softmax(logits, dim=dim)
-        p = torch.nn.functional.softmax(logits, dim=dim)
-        return -(p * log_p).sum(dim=dim)
+          # Avoid log(0)
+        return -(p * p.log().nan_to_num()).sum(dim=dim).nan_to_num()
 
 
     def compute_multiclass_uncertainty(self, mc_preds, eps=1e-6):
@@ -201,7 +195,7 @@ class MonteCarloInference:
         self.compute_uncertainty()
 
 if __name__ == "__main__":
-
+    '''
     mc_inference = MonteCarloInference(
         dataset_name = 'Dataset003_ImageCAS_split',
         model='nnUNetTrainerDropout__p05_s2__3d_fullres',
@@ -222,7 +216,7 @@ if __name__ == "__main__":
         dataset_name = 'Dataset003_ImageCAS_split',
         model='nnUNetTrainerDropout__p05_s2__3d_fullres',
         n_cases=20,
-        n_sim=10,
+        n_sim=30,
         folds=(0,),
         cuda_device=3,
         variance=True,
@@ -230,14 +224,14 @@ if __name__ == "__main__":
         entropy=True
     )
 
-    # mc_inference.run()
-    mc_inference.compute_uncertainty()
+    mc_inference.run()
+    # mc_inference.compute_uncertainty()
 
     mc_inference = MonteCarloInference(
         dataset_name = 'Dataset003_ImageCAS_split',
         model='nnUNetTrainerDropout__p02_s2__3d_fullres',
         n_cases=20,
-        n_sim=10,
+        n_sim=30,
         folds=(0,),
         cuda_device=3,
         variance=True,
@@ -245,14 +239,14 @@ if __name__ == "__main__":
         entropy=True
     )
 
-    # mc_inference.run()
-    mc_inference.compute_uncertainty()
+    mc_inference.run()
+    # mc_inference.compute_uncertainty()
 
     mc_inference = MonteCarloInference(
         dataset_name = 'Dataset003_ImageCAS_split',
         model='nnUNetTrainerDropout__p01_s2__3d_fullres',
         n_cases=20,
-        n_sim=10,
+        n_sim=30,
         folds=(0,),
         cuda_device=3,
         variance=True,
@@ -260,14 +254,14 @@ if __name__ == "__main__":
         entropy=True
     )
 
-    # mc_inference.run()
-    mc_inference.compute_uncertainty()
+    mc_inference.run()
+    # mc_inference.compute_uncertainty()
 
     mc_inference = MonteCarloInference(
         dataset_name = 'Dataset003_ImageCAS_split',
         model='nnUNetTrainerDropout__p02_s1__3d_fullres',
         n_cases=20,
-        n_sim=10,
+        n_sim=30,
         folds=(0,),
         cuda_device=3,
         variance=True,
@@ -275,14 +269,14 @@ if __name__ == "__main__":
         entropy=True
     )
 
-    # mc_inference.run()
-    mc_inference.compute_uncertainty()
+    mc_inference.run()
+    # mc_inference.compute_uncertainty()
 
     mc_inference = MonteCarloInference(
         dataset_name = 'Dataset003_ImageCAS_split',
         model='nnUNetTrainerDropout__p02_s3__3d_fullres',
         n_cases=20,
-        n_sim=10,
+        n_sim=30,
         folds=(0,),
         cuda_device=3,
         variance=True,
@@ -290,7 +284,7 @@ if __name__ == "__main__":
         entropy=True
     )
 
-    #mc_inference.run()
-    mc_inference.compute_uncertainty()
+    mc_inference.run()
+    # mc_inference.compute_uncertainty()
 
-    '''
+    
