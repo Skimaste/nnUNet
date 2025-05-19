@@ -75,6 +75,7 @@ class ResidualEncoderDropoutUNet(nn.Module):
     def initialize(module):
         InitWeights_He(1e-2)(module)
         init_last_bn_before_add_to_0(module)
+
 def print_model_parameters(model):
     print(f"{'Module':<50} {'# Parameters':>15}")
     print("="*65)
@@ -88,40 +89,46 @@ def print_model_parameters(model):
     print(f"{'Total':<50} {total_params:>15}")
 
 if __name__ == '__main__':
-    data = torch.rand((1, 3, 128, 160))  # [batch_size, channels, height, width]
+    data = torch.rand((2, 1, 64, 64, 64))  # [batch_size, channels, depth, height, width]
 
 
     model = ResidualEncoderDropoutUNet(
-        input_channels=3,
-        n_stages=3,
-        features_per_stage=[32, 64, 128],
-        conv_op=nn.Conv2d,
-        kernel_sizes=[3, 3, 3],
-        strides=[1, 2, 2],
-        n_blocks_per_stage=[2, 2,  2],
+        input_channels=1,
+        n_stages=6,
+        features_per_stage=[32, 64, 128, 256, 320, 320],
+        conv_op=nn.Conv3d,
+        kernel_sizes=[3, 3, 3, 3, 3, 3],
+        strides=[1, 2, 2, 2, 2, 2],
+        n_blocks_per_stage=[1, 2, 2, 2, 2, 2],
         num_classes=2,
-        n_conv_per_stage_decoder=[1, 1],
+        n_conv_per_stage_decoder=[1, 1, 1, 1, 1],
         conv_bias=True,
-        norm_op=nn.BatchNorm2d,
+        norm_op=nn.BatchNorm3d,
         norm_op_kwargs={"eps": 1e-5, "momentum": 0.1},
-        dropout_op=nn.Dropout2d,
-        dropout_op_kwargs={"p": 0.5},
+        dropout_op=nn.Dropout3d,
+        dropout_op_kwargs={"p": 0.2},
         nonlin=nn.ReLU,
         nonlin_kwargs={"inplace": True},
-        skip_dropout_layers=0,
+        skip_dropout_layers=2,
         deep_supervision=True,
         block=BasicBlockD,  # or BottleneckD if you want
-        bottleneck_channels=[16, 32, 64],
+        bottleneck_channels=[16, 32, 64, 128, 256, 512],
         stem_channels=16)
     # Forward pass (debugging) 3547142, 3547142
-    #model.train()
+    model.train()
+
+    '''
     for name, module in model.named_modules():
         if 'Dropout' in module.__class__.__name__:
             print(name, module)
 
     output = model(data)
+    '''
+    # output = model(data)
+    # make_dot(output[0], params=dict(model.named_parameters())).render("model_graph", format="png")
+    # print_model_parameters(model)
 
-    #make_dot(output[0], params=dict(model.named_parameters())).render("model_graph", format="png")
-    #print_model_parameters(model)
+    from torchinfo import summary
+    summary(model, input_size=(2, 1, 64, 64, 64), depth=5, verbose=1)
 
 
