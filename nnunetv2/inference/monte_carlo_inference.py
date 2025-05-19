@@ -45,8 +45,9 @@ class MonteCarloInference:
 
     def categorical_entropy(self, p, dim, eps):
         """Compute entropy for multi-class probabilities."""
-          # Avoid log(0)
-        return -(p * p.log().nan_to_num()).sum(dim=dim).nan_to_num()
+          # Log2 as we have two classes
+        entropy = -(p * p.log2().nan_to_num()).sum(dim=dim).nan_to_num()
+        return entropy / torch.log2(torch.tensor(p.size(dim)))
 
 
     def compute_multiclass_uncertainty(self, mc_preds, eps=1e-6):
@@ -195,23 +196,9 @@ class MonteCarloInference:
         self.compute_uncertainty()
 
 if __name__ == "__main__":
-    '''
-    mc_inference = MonteCarloInference(
-        dataset_name = 'Dataset003_ImageCAS_split',
-        model='nnUNetTrainerDropout__p05_s2__3d_fullres',
-        n_cases=2,
-        n_sim=10,
-        folds=(0,),
-        cuda_device=3,
-        variance=True,
-        mean=True,
-        entropy=True
-    )
 
-    # mc_inference.run()
-    mc_inference.compute_uncertainty()
-
-    '''
+    nnUNet_results = '/mnt/processing/emil/nnUNet_results'   
+    
     mc_inference = MonteCarloInference(
         dataset_name = 'Dataset003_ImageCAS_split',
         model='nnUNetTrainerDropout__p05_s2__3d_fullres',
@@ -223,10 +210,10 @@ if __name__ == "__main__":
         mean=True,
         entropy=True
     )
-
-    mc_inference.run()
-    # mc_inference.compute_uncertainty()
-
+    
+    # mc_inference.run()
+    mc_inference.compute_uncertainty()
+    
     mc_inference = MonteCarloInference(
         dataset_name = 'Dataset003_ImageCAS_split',
         model='nnUNetTrainerDropout__p02_s2__3d_fullres',
@@ -239,8 +226,8 @@ if __name__ == "__main__":
         entropy=True
     )
 
-    mc_inference.run()
-    # mc_inference.compute_uncertainty()
+    # mc_inference.run()
+    mc_inference.compute_uncertainty()
 
     mc_inference = MonteCarloInference(
         dataset_name = 'Dataset003_ImageCAS_split',
@@ -254,8 +241,8 @@ if __name__ == "__main__":
         entropy=True
     )
 
-    mc_inference.run()
-    # mc_inference.compute_uncertainty()
+    # mc_inference.run()
+    mc_inference.compute_uncertainty()
 
     mc_inference = MonteCarloInference(
         dataset_name = 'Dataset003_ImageCAS_split',
@@ -269,8 +256,8 @@ if __name__ == "__main__":
         entropy=True
     )
 
-    mc_inference.run()
-    # mc_inference.compute_uncertainty()
+    # mc_inference.run()
+    mc_inference.compute_uncertainty()
 
     mc_inference = MonteCarloInference(
         dataset_name = 'Dataset003_ImageCAS_split',
@@ -284,7 +271,6 @@ if __name__ == "__main__":
         entropy=True
     )
 
-    mc_inference.run()
-    # mc_inference.compute_uncertainty()
-
-    
+    # mc_inference.run()
+    mc_inference.compute_uncertainty()
+   
