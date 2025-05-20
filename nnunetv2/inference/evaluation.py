@@ -2,6 +2,9 @@ import os
 import json
 import nibabel as nib
 import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
 import torch
 from torchmetrics.classification import MulticlassCalibrationError
 
@@ -114,6 +117,7 @@ class Evaluater:
         # Save results to a JSON file
         self.save_summary(results, n_cases_evaluated)
 
+
     def save_summary(self, results, n_cases_evaluated):
         if results:
             ece_mean_vals = [r["ECE for mean"] for r in results]
@@ -146,7 +150,7 @@ class Evaluater:
 
 
 
-result_root = "/mnt/processing/emil/nnUNet_results/Dataset003_ImageCAS_split/nnUNetTrainerDropout__p02_s3__3d_fullres/inference"
+result_root = "/mnt/processing/emil/nnUNet_results/Dataset003_ImageCAS_split/nnUNetTrainerDropout__p02_s2__3d_fullres/inference"
 label_dir = "/data/dsstu/nnUNet_raw/Dataset003_ImageCAS_split/labelsTs"
 
 evaluator = Evaluater(result_root, label_dir, n_cases=20)
