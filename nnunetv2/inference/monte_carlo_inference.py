@@ -35,12 +35,17 @@ class MonteCarloInference:
         self.variance = variance
         self.mean = mean
 
+
+    def calc_time(self, print_time=True):
         time_for_one_case_s = 70 # in seconds # depends on image size, tile_step_size
-        time_s = n_cases * n_sim * len(folds) * time_for_one_case_s * 1.1 # 10% more time for overhead
+        time_s = self.n_cases * self.n_sim * len(self.folds) * time_for_one_case_s * 1.1 # 10% more time for overhead
         time = str(datetime.timedelta(seconds=time_s))
 
         self.time_estimation = time
-        print(f"Estimated time for {n_cases} cases with {n_sim} simulations and folds {folds}: {time}")
+        
+        if print_time:
+            print(f"Estimated time for {self.n_cases} cases with {self.n_sim} simulations and folds {self.folds}: {self.time_estimation}")
+        return self.time_estimation
 
 
     def categorical_entropy(self, p, dim, eps):
@@ -192,6 +197,7 @@ class MonteCarloInference:
         nib.save(img, join(outdir, f'case_{case}/case_{case}_{metric}.nii.gz'))
 
     def run(self):
+        self.calc_time()
         self.run_inference()
         self.compute_uncertainty()
 
