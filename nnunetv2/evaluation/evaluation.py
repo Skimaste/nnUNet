@@ -7,6 +7,8 @@ import pandas as pd
 import seaborn as sns
 import torch
 from torchmetrics.classification import MulticlassCalibrationError
+from monai.metrics import compute_hausdorff_distance
+import torch.nn.functional as F
 
 class Evaluater:
     def __init__(self, result_root, label_dir, threshold=0.5, bins=10, n_cases=10):
@@ -108,7 +110,19 @@ class Evaluater:
         return dsc
     
     def compute_HD95(self, prob_map, gt_map):
-        return None
+        prob_map = torch.from_numpy(prob_map)  # shape: [2, H, W, D]
+        gt_map = torch.from_numpy(gt_map).long()  # shape: [H, W, D]
+
+        pred_labels = torch.argmax(prob_map, dim=0)  # shape: [H, W, D]
+
+        # Only compute HD95 for foreground class (class 1)
+        pred_binary = (pred_labels == 1).unsqueeze(0).unsqueeze(0).float()  # shape: [1, 1, H, W, D]
+        gt_binary = (gt_map == 1).unsqueeze(0).unsqueeze(0).float()  # shape: [1, 1, H, W, D]
+
+        # Compute Hausdorff Distance (95th percentile)
+        hd95 = compute_hausdorff_distance(pred_binary, gt_binary, spacing=(1.0, 1.0, 1.0), percentile=95.0)
+
+        return hd95.item()
 
 
     def run_evaluation(self):
@@ -145,14 +159,20 @@ class Evaluater:
                 # Evaluate the case
                 ece_prob, ece_variance, ece_entropy = self.evaluate_case(prob_map, var_map, gt_map, entropy_map)
 
+                # Compute DSC and HD95
+                dsc = self.compute_DSC(prob_map, gt_map)
+                hd95 = self.compute_HD95(prob_map, gt_map)
+
                 # Store the result
                 results.append({
                     "case": case,
                     "ECE for probabilities": ece_prob,
                     "ECE for variance": ece_variance,
-                    "ECE for entropy": ece_entropy
+                    "ECE for entropy": ece_entropy,
+                    "DSC": dsc,
+                    "HD95": hd95
                 })
-                print(f"{case} -> ECE for probabilities: {ece_prob:.5f}, ECE for variance: {ece_variance:.5f}, ECE for Shannon entropy: {ece_entropy:.5f}")
+                print(f"{case} -> ECE for probabilities: {ece_prob:.5f}, ECE for variance: {ece_variance:.5f}, ECE for entropy: {ece_entropy:.5f}, DSC: {dsc:.5f}, HD95: {hd95:.5f}")
                 n_cases_evaluated += 1  # Increment the number of cases evaluated
             except Exception as e:
                 print(f"Error in case {case}: {e}")
@@ -166,22 +186,28 @@ class Evaluater:
             ece_prob_vals = [r["ECE for probabilities"] for r in results]
             ece_variance_vals = [r["ECE for variance"] for r in results]
             ece_shannon_vals = [r["ECE for entropy"] for r in results]
+            dsc = [d["DSC"] for d in results]
+            hd95 = [d["HD95"] for d in results]
 
             mean_summary = {
                 "mean ECE for probabilities": float(np.mean(ece_prob_vals)),
                 "mean ECE for variance": float(np.mean(ece_variance_vals)),
-                "mean ECE for entropy": float(np.mean(ece_shannon_vals))
+                "mean ECE for entropy": float(np.mean(ece_shannon_vals)),
+                "mean DSC": float(np.mean(dsc)),
+                "mean HD95": float(np.mean(hd95))
             }
         else:
             mean_summary = {
                 "mean_ECE for probabilities": None,
                 "mean ECE for variance": None,
-                "mean ECE for entropy": None
+                "mean ECE for entropy": None,
+                "mean DSC": None,
+                "mean HD95": None
             }
 
         summary = {
             "number_of_cases_evaluated": n_cases_evaluated,
-            "mean_metrics": mean_summary,
+            "mean_metrics": mean_summary, 
             "results": results
         }
 
