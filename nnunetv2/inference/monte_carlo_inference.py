@@ -19,6 +19,7 @@ class MonteCarloInference:
                  folds,
                  n_cases,
                  cuda_device,
+                 tta = True,
                  entropy = True,
                  variance = True,
                  mean = True
@@ -34,6 +35,8 @@ class MonteCarloInference:
         self.entropy = entropy
         self.variance = variance
         self.mean = mean
+        self.model = model
+        self.tta = tta
 
 
     def calc_time(self, print_time=True):
@@ -106,7 +109,7 @@ class MonteCarloInference:
         predictor = nnUNetPredictorMCDropout(
             tile_step_size=0.5, # can change this for speedup, but then we need to turn off gaussian noise if we choose 1
             use_gaussian=True,
-            use_mirroring=True,
+            use_mirroring=self.tta,
             perform_everything_on_device=True,
             device=torch.device('cuda', self.cuda_device),
             verbose=False,
@@ -212,6 +215,7 @@ if __name__ == "__main__":
         n_sim=30,
         folds=(0,),
         cuda_device=3,
+        tta=True,
         variance=True,
         mean=True,
         entropy=True
@@ -227,6 +231,7 @@ if __name__ == "__main__":
         n_sim=30,
         folds=(0,),
         cuda_device=3,
+        tta=True,
         variance=True,
         mean=True,
         entropy=True
@@ -242,6 +247,7 @@ if __name__ == "__main__":
         n_sim=30,
         folds=(0,),
         cuda_device=3,
+        tta=True,
         variance=True,
         mean=True,
         entropy=True
@@ -257,6 +263,7 @@ if __name__ == "__main__":
         n_sim=30,
         folds=(0,),
         cuda_device=3,
+        tta=True,
         variance=True,
         mean=True,
         entropy=True
@@ -272,6 +279,7 @@ if __name__ == "__main__":
         n_sim=30,
         folds=(0,),
         cuda_device=3,
+        tta=True,
         variance=True,
         mean=True,
         entropy=True
