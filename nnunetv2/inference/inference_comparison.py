@@ -2,7 +2,9 @@ from nnunetv2.inference.monte_carlo_inference import MonteCarloInference
 
 dataset_name = 'Dataset003_ImageCAS_split'
 
-n_cases = 20
+n_cases = 20 # maybe 100 for final results??
+
+# todo: assign gpu cores depending on runtime
 
 '''
 script for comparing the different model combinations for uncertainty estimation

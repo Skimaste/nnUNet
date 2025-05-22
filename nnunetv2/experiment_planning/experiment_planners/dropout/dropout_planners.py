@@ -365,3 +365,34 @@ class p05_s2_planner(ResEncDropoutUNetPlanner):
         # parameters regarding dropout
         self.dropout_p = 0.5
         self.skip_dropout_layers = 2
+
+
+
+class p00_s2_planner(ResEncDropoutUNetPlanner):
+    """
+    Target is ~9-11 GB VRAM max -> older Titan, RTX 2080ti
+    """
+    def __init__(self, dataset_name_or_id: Union[str, int],
+                 gpu_memory_target_in_gb: float = 32,
+                 preprocessor_name: str = 'DefaultPreprocessor', plans_name: str = 'p00_s2',
+                 overwrite_target_spacing: Union[List[float], Tuple[float, ...]] = None,
+                 suppress_transpose: bool = False):
+        if gpu_memory_target_in_gb != 32:
+            warnings.warn("WARNING: You are running nnUNetPlannerM with a non-standard gpu_memory_target_in_gb. "
+                          f"Expected 32, got {gpu_memory_target_in_gb}."
+                          "You should only see this warning if you modified this value intentionally!!")
+        super().__init__(dataset_name_or_id, gpu_memory_target_in_gb, preprocessor_name, plans_name,
+                         overwrite_target_spacing, suppress_transpose)
+        self.UNet_class = ResidualEncoderDropoutUNet
+
+        self.UNet_vram_target_GB = gpu_memory_target_in_gb
+        self.UNet_reference_val_corresp_GB = 32
+
+        # this is supposed to give the same GPU memory requirement as the default nnU-Net
+        self.UNet_reference_val_3d = 680000000
+        self.UNet_reference_val_2d = 135000000
+        self.max_dataset_covered = 1
+
+        # parameters regarding dropout
+        self.dropout_p = 0.0
+        self.skip_dropout_layers = 2
