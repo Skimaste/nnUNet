@@ -19,11 +19,13 @@ class MonteCarloInference:
                  folds,
                  n_cases,
                  cuda_device,
+                 config_name=None,
                  tta = True,
                  entropy = True,
                  variance = True,
                  mean = True
                  ):
+        self.config_name = config_name
         self.dataset_name = dataset_name
         self.indir = join(nnUNet_raw, dataset_name, 'imagesTs')
         self.model_path = join(nnUNet_results, dataset_name, model)
@@ -37,7 +39,9 @@ class MonteCarloInference:
         self.mean = mean
         self.model = model
         self.tta = tta
-
+        if self.config_name:
+            self.outdir = join(self.model_path, 'inference', self.config_name)
+        
 
     def calc_time(self, print_time=True):
         time_for_one_case_s = 70 # in seconds # depends on image size, tile_step_size
@@ -215,6 +219,7 @@ if __name__ == "__main__":
         n_sim=30,
         folds=(0,),
         cuda_device=3,
+        config_name=None,
         tta=True,
         variance=True,
         mean=True,
