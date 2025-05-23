@@ -109,7 +109,7 @@ class Evaluater:
         dsc = (2 * intersection) / (np.sum(pred == 1) + np.sum(gt == 1))
         return dsc
     
-    def compute_HD95(self, prob_map, gt_map):
+    def compute_HD95(self, prob_map, gt_map, spacing):
         prob_map = torch.from_numpy(prob_map)  # shape: [2, H, W, D]
         gt_map = torch.from_numpy(gt_map).long()  # shape: [H, W, D]
 
@@ -120,8 +120,9 @@ class Evaluater:
         gt_binary = (gt_map == 1).unsqueeze(0).unsqueeze(0).float()  # shape: [1, 1, H, W, D]
 
         # Compute Hausdorff Distance (95th percentile)
-        hd95 = compute_hausdorff_distance(pred_binary, gt_binary, spacing=(1.0, 1.0, 1.0), percentile=95.0) # but this is not the right spacing
+        hd95 = compute_hausdorff_distance(pred_binary, gt_binary, spacing=spacing, percentile=95.0)
         # The right dimensions are specific to the image
+        # and wrong function to be calling
 
         return hd95.item()
 
@@ -157,12 +158,21 @@ class Evaluater:
                 gt_map = nib.load(gt_path).get_fdata()
                 entropy_map = nib.load(entropy_path).get_fdata()
 
+                # get affine matrix
+                affine = nib.load(prob_path).affine
+
+                # get the spacing from the affine matrix
+                # The spacing is the diagonal of the affine matrix
+                # The affine matrix is 4x4, and the spacing is in the first three rows and columns
+                spacing = np.linalg.norm(affine[:3, :3], axis=0)[::-1] # reverse the order to get z first
+
+
                 # Evaluate the case
                 ece_prob, ece_variance, ece_entropy = self.evaluate_case(prob_map, var_map, gt_map, entropy_map)
 
                 # Compute DSC and HD95
                 dsc = self.compute_DSC(prob_map, gt_map)
-                hd95 = self.compute_HD95(prob_map, gt_map)
+                hd95 = self.compute_HD95(prob_map, gt_map, spacing)
 
                 # Store the result
                 results.append({
@@ -212,7 +222,7 @@ class Evaluater:
             "results": results
         }
 
-        json_path = os.path.join(self.result_root, "evaluation_summary_masked.json")
+        json_path = os.path.join(self.result_root, "evaluation_summary_masked_debug.json")
         with open(json_path, "w") as jsonfile:
             json.dump(summary, jsonfile, indent=4)
 
