@@ -120,9 +120,8 @@ class Evaluater:
         gt_binary = (gt_map == 1).unsqueeze(0).unsqueeze(0).float()  # shape: [1, 1, H, W, D]
 
         # Compute Hausdorff Distance (95th percentile)
-        hd95 = compute_hausdorff_distance(pred_binary, gt_binary, spacing=spacing, percentile=95.0)
-        # The right dimensions are specific to the image
-        # and wrong function to be calling
+        hd95 = compute_hausdorff_distance(pred_binary, gt_binary, spacing=spacing, percentile=95.0) # The right spacing is specific to the image
+        # and wrong function to be calling, should be HausdorffDistanceMetric class, but this works
 
         return hd95.item()
 
