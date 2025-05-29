@@ -26,6 +26,51 @@ class Evaluater:
         var = variance_map.flatten()
         gt = gt_map.flatten()
         shannon = shannon_map.flatten()
+
+        # Normalize uncertainty
+        norm_unc = (var - np.min(var)) / (np.max(var) - np.min(var) + 1e-8)
+        norm_shannon = (shannon - np.min(shannon)) / (np.max(shannon) - np.min(shannon) + 1e-8)
+
+        # Convert to tensors
+        prob = torch.tensor(prob, dtype=torch.float32)
+        norm_unc = torch.tensor(norm_unc, dtype=torch.float32)
+        gt = torch.tensor(gt, dtype=torch.float32)
+        norm_shannon = torch.tensor(norm_shannon, dtype=torch.float32)
+
+        # ECE for non-masked maps
+        ece_metric = MulticlassCalibrationError(num_classes=prob.shape[-1], n_bins=self.bins)
+        ece_prob = ece_metric(prob, gt).item()
+
+        # EUCE
+        prob_class1 = prob[:, 1]
+        pred = (prob_class1 >= self.threshold).float()
+        correct = (pred == gt).float()
+
+        ece_variance = 0.0
+        for i in range(self.bins):
+            bin_lower = i / self.bins
+            bin_upper = (i + 1) / self.bins
+            mask = (norm_unc >= bin_lower) & (norm_unc < bin_upper)
+            if torch.any(mask):
+                bin_err = 1 - torch.mean(correct[mask])
+                bin_conf = torch.mean(norm_unc[mask])
+                bin_weight = torch.sum(mask).item() / len(prob)
+                ece_variance += bin_weight * abs(bin_err.item() - bin_conf.item())
+        
+        ece_entropy = 0.0
+        for i in range(self.bins):
+            bin_lower = i / self.bins
+            bin_upper = (i + 1) / self.bins
+            mask = (norm_shannon >= bin_lower) & (norm_shannon < bin_upper)
+            if torch.any(mask):
+                bin_err = 1 - torch.mean(correct[mask])
+                bin_conf = torch.mean(norm_shannon[mask])
+                bin_weight = torch.sum(mask).item() / len(prob)
+                ece_entropy += bin_weight * abs(bin_err.item() - bin_conf.item())
+
+
+
+        # ECE for masked maps
         # Normalize uncertainty
         var = (var - np.min(var)) / (np.max(var) - np.min(var))
         entropy = (shannon - np.min(shannon)) / (np.max(shannon) - np.min(shannon))
@@ -61,14 +106,14 @@ class Evaluater:
 
         # ECE
         ece_metric = MulticlassCalibrationError(num_classes=prob.shape[-1], n_bins=self.bins)
-        ece_prob = ece_metric(prob_prob, gt_prob).item()
+        ece_prob_mask = ece_metric(prob_prob, gt_prob).item()
 
         # EUCE
         
         pred_var = (prob_var >= self.threshold).float()
         correct_var = (pred_var == gt_var).float()
 
-        ece_variance = 0.0
+        ece_variance_mask = 0.0
         for i in range(self.bins):
             bin_lower = i / self.bins
             bin_upper = (i + 1) / self.bins
@@ -77,13 +122,13 @@ class Evaluater:
                 bin_err = 1 - torch.mean(correct_var[mask])
                 bin_conf = torch.mean(var_var[mask])
                 bin_weight = torch.sum(mask).item() / len(prob_var)
-                ece_variance += bin_weight * abs(bin_err.item() - bin_conf.item())
+                ece_variance_mask += bin_weight * abs(bin_err.item() - bin_conf.item())
 
        
         pred_entropy = (prob_entropy >= self.threshold).float()
         correct_entropy = (pred_entropy == gt_entropy).float()
         
-        ece_entropy = 0.0
+        ece_entropy_mask = 0.0
         for i in range(self.bins):
             bin_lower = i / self.bins
             bin_upper = (i + 1) / self.bins
@@ -92,10 +137,10 @@ class Evaluater:
                 bin_err = 1 - torch.mean(correct_entropy[mask])
                 bin_conf = torch.mean(entropy_entropy[mask])
                 bin_weight = torch.sum(mask).item() / len(prob_entropy)
-                ece_entropy += bin_weight * abs(bin_err.item() - bin_conf.item())
+                ece_entropy_mask += bin_weight * abs(bin_err.item() - bin_conf.item())
 
 
-        return ece_prob, ece_variance, ece_entropy
+        return ece_prob, ece_prob_mask, ece_variance, ece_variance_mask, ece_entropy, ece_entropy_mask
 
     def compute_DSC(self, prob_map, gt_map):
         prob_map = np.moveaxis(prob_map, 0, -1)
@@ -167,7 +212,7 @@ class Evaluater:
 
 
                 # Evaluate the case
-                ece_prob, ece_variance, ece_entropy = self.evaluate_case(prob_map, var_map, gt_map, entropy_map)
+                ece_prob, ece_prob_mask, ece_variance, ece_variance_mask, ece_entropy, ece_entropy_mask = self.evaluate_case(prob_map, var_map, gt_map, entropy_map)
 
                 # Compute DSC and HD95
                 dsc = self.compute_DSC(prob_map, gt_map)
@@ -177,12 +222,15 @@ class Evaluater:
                 results.append({
                     "case": case,
                     "ECE for probabilities": ece_prob,
+                    "ECE for probabilities masked": ece_prob_mask,
                     "ECE for variance": ece_variance,
+                    "ECE for variance masked": ece_variance_mask,
                     "ECE for entropy": ece_entropy,
+                    "ECE for entropy masked": ece_entropy_mask,
                     "DSC": dsc,
                     "HD95": hd95
                 })
-                print(f"{case} -> ECE for probabilities: {ece_prob:.5f}, ECE for variance: {ece_variance:.5f}, ECE for entropy: {ece_entropy:.5f}, DSC: {dsc:.5f}, HD95: {hd95:.5f}")
+                print(f"{case} -> ECE for probabilities: {ece_prob:.5f} and {ece_prob_mask:.5f}, ECE for variance: {ece_variance:.5f} and {ece_variance_mask:.5f}, ECE for entropy: {ece_entropy:.5f} and {ece_entropy_mask:.5f}, DSC: {dsc:.5f}, HD95: {hd95:.5f}")
                 n_cases_evaluated += 1  # Increment the number of cases evaluated
             except Exception as e:
                 print(f"Error in case {case}: {e}")
@@ -194,23 +242,32 @@ class Evaluater:
     def save_summary(self, results, n_cases_evaluated):
         if results:
             ece_prob_vals = [r["ECE for probabilities"] for r in results]
+            ece_prob_mask_vals = [r["ECE for probabilities masked"] for r in results]
             ece_variance_vals = [r["ECE for variance"] for r in results]
+            ece_variance_mask_vals = [r["ECE for variance masked"] for r in results]
             ece_shannon_vals = [r["ECE for entropy"] for r in results]
+            ece_shannon_mask_vals = [r["ECE for entropy masked"] for r in results]
             dsc = [d["DSC"] for d in results]
             hd95 = [d["HD95"] for d in results]
 
             mean_summary = {
                 "mean ECE for probabilities": float(np.mean(ece_prob_vals)),
+                "mean ECE for probabilities masked": float(np.mean(ece_prob_mask_vals)),
                 "mean ECE for variance": float(np.mean(ece_variance_vals)),
+                "mean ECE for variance masked": float(np.mean(ece_variance_mask_vals)),
                 "mean ECE for entropy": float(np.mean(ece_shannon_vals)),
+                "mean ECE for entropy masked": float(np.mean(ece_shannon_mask_vals)),
                 "mean DSC": float(np.mean(dsc)),
                 "mean HD95": float(np.mean(hd95))
             }
         else:
             mean_summary = {
                 "mean_ECE for probabilities": None,
+                "mean ECE for probabilities masked": None,
                 "mean ECE for variance": None,
+                "mean ECE for variance masked": None,
                 "mean ECE for entropy": None,
+                "mean ECE for entropy masked": None,
                 "mean DSC": None,
                 "mean HD95": None
             }
@@ -221,7 +278,7 @@ class Evaluater:
             "results": results
         }
 
-        json_path = os.path.join(self.result_root, "evaluation_summary_masked_debug.json")
+        json_path = os.path.join(self.result_root, "evaluation_summary.json")
         with open(json_path, "w") as jsonfile:
             json.dump(summary, jsonfile, indent=4)
 
@@ -230,8 +287,20 @@ class Evaluater:
 
 if __name__ == "__main__":
     
-    result_root_1 = "/mnt/processing/emil/nnUNet_results/Dataset003_ImageCAS_split/nnUNetTrainerDropout__p02_s2__3d_fullres/inference"
     label_dir = "/data/dsstu/nnUNet_raw/Dataset003_ImageCAS_split/labelsTs"
 
-    evaluator_1 = Evaluater(result_root_1, label_dir, n_cases=20)
-    evaluator_1.run_evaluation()
+    result_root = "/mnt/processing/emil/nnUNet_results/Dataset003_ImageCAS_split/nnUNetTrainerDropout__p01_s2__3d_fullres/inference"
+    evaluator = Evaluater(result_root, label_dir, n_cases=20)
+    evaluator.run_evaluation()
+
+    result_root = "/mnt/processing/emil/nnUNet_results/Dataset003_ImageCAS_split/nnUNetTrainerDropout__p02_s1__3d_fullres/inference"
+    evaluator = Evaluater(result_root, label_dir, n_cases=20)
+    evaluator.run_evaluation()
+
+    result_root = "/mnt/processing/emil/nnUNet_results/Dataset003_ImageCAS_split/nnUNetTrainerDropout__p02_s3__3d_fullres/inference"
+    evaluator = Evaluater(result_root, label_dir, n_cases=20)
+    evaluator.run_evaluation()
+
+    result_root = "/mnt/processing/emil/nnUNet_results/Dataset003_ImageCAS_split/nnUNetTrainerDropout__p05_s2__3d_fullres/inference"
+    evaluator = Evaluater(result_root, label_dir, n_cases=20)
+    evaluator.run_evaluation()
