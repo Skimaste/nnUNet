@@ -176,7 +176,7 @@ class Evaluater:
         n_cases_evaluated = 0
 
         # Get list of all case directories in result_root
-        case_dirs = [os.path.join(self.result_root, case) for case in os.listdir(self.result_root) if os.path.isdir(os.path.join(self.result_root, case))]
+        case_dirs = [os.path.join(self.result_root, case) for case in sorted(os.listdir(self.result_root)) if os.path.isdir(os.path.join(self.result_root, case))]
 
         # Limit the number of cases if n_cases is provided
         if self.n_cases is not None:
