@@ -159,6 +159,8 @@ class MonteCarloInference:
                 for key in keys
             }
 
+            os.makedirs(join(self.outdir, f'case_{case}'), exist_ok=True)
+
             np.savez_compressed(join(self.outdir, f'case_{case}/case_{case}_merged.npz'), **concatenated_data)
 
             shutil.rmtree(temp_outdir)

@@ -231,19 +231,7 @@ class Evaluater:
 if __name__ == "__main__":
     
     result_root_1 = "/mnt/processing/emil/nnUNet_results/Dataset003_ImageCAS_split/nnUNetTrainerDropout__p02_s2__3d_fullres/inference"
-    result_root_2 = "/mnt/processing/emil/nnUNet_results/Dataset003_ImageCAS_split/nnUNetTrainerDropout__p01_s2__3d_fullres/inference"
-    result_root_3 = "/mnt/processing/emil/nnUNet_results/Dataset003_ImageCAS_split/nnUNetTrainerDropout__p05_s2__3d_fullres/inference"
-    result_root_4 = "/mnt/processing/emil/nnUNet_results/Dataset003_ImageCAS_split/nnUNetTrainerDropout__p02_s1__3d_fullres/inference"
-    result_root_5 = "/mnt/processing/emil/nnUNet_results/Dataset003_ImageCAS_split/nnUNetTrainerDropout__p02_s3__3d_fullres/inference"
     label_dir = "/data/dsstu/nnUNet_raw/Dataset003_ImageCAS_split/labelsTs"
 
     evaluator_1 = Evaluater(result_root_1, label_dir, n_cases=20)
     evaluator_1.run_evaluation()
-    evaluator_2 = Evaluater(result_root_2, label_dir, n_cases=20)
-    evaluator_2.run_evaluation()
-    evaluator_3 = Evaluater(result_root_3, label_dir, n_cases=20)
-    evaluator_3.run_evaluation()
-    evaluator_4 = Evaluater(result_root_4, label_dir, n_cases=20)
-    evaluator_4.run_evaluation()
-    evaluator_5 = Evaluater(result_root_5, label_dir, n_cases=20)
-    evaluator_5.run_evaluation()
