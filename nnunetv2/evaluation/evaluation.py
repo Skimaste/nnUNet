@@ -187,7 +187,7 @@ class Evaluater:
             case = os.path.basename(case_dir)
             try:
                 prob_path = os.path.join(case_dir, f"{case}_mean.nii.gz")
-                var_path = os.path.join(case_dir, f"{case}_var.nii.gz")
+                var_path = os.path.join(case_dir, f"{case}_variance.nii.gz")
                 gt_path = os.path.join(self.label_dir, f"{case}.nii.gz")
                 entropy_path = os.path.join(case_dir, f"{case}_shannon_entropy.nii.gz")
 
