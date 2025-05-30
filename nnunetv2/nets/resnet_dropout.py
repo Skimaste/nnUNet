@@ -1,7 +1,6 @@
 from typing import Union, Type, List, Tuple
 import numpy as np
 import torch
-from torchviz import make_dot
 from dynamic_network_architectures.building_blocks.helper import convert_conv_op_to_dim
 from dynamic_network_architectures.building_blocks.plain_conv_encoder import PlainConvEncoder
 from dynamic_network_architectures.building_blocks.residual import BasicBlockD, BottleneckD
@@ -89,6 +88,8 @@ def print_model_parameters(model):
     print(f"{'Total':<50} {total_params:>15}")
 
 if __name__ == '__main__':
+    from torchviz import make_dot
+
     data = torch.rand((2, 1, 64, 64, 64))  # [batch_size, channels, depth, height, width]
 
 
