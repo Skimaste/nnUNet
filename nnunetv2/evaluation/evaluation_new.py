@@ -38,17 +38,25 @@ class Evaluator:
             reduction=dice_reduction
         )
 
+    
+    def mae_metric(self, y_pred, y):
+        """
+        Calculate Mean Absolute Error (MAE) between entropy maps and ground truth minus prediction.
+        """
+        return torch.mean(torch.abs(y_pred - y))
+
 
     def calc_metrics(self, gt, pred, spacing=None):
         hd95 = self.hausdorff_metric(y_pred=pred, y=gt, spacing=spacing).aggregate().item()
         dice = self.dice_metric(y_pred=pred, y=gt).aggregate().item()
         ece = self.calibration_metric.update(pred, gt.squeeze(1)).compute().item()
+        mae = self.mae_metric(y_pred=pred, y=gt).item()
         self.hausdorff_metric.reset()
         self.calibration_metric.reset()
         self.dice_metric.reset()
 
-        return hd95, dice, ece
-    
+        return hd95, dice, ece, mae
+
     def mask_image(self, gt, pred):
         # Apply the masking threshold to the ground truth and prediction
         mask = pred > self.masking_threshold
