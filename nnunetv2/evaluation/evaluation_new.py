@@ -6,6 +6,7 @@ import nibabel as nib
 import torch
 import re
 import numpy as np
+import gc
 
 from monai.metrics.hausdorff_distance import HausdorffDistanceMetric
 from monai.metrics.meandice import DiceMetric
@@ -122,7 +123,7 @@ class Evaluator:
     def evaluate(self):
         cases = self.find_cases()
 
-        for case in cases[:1]:  # For testing, limit to first 2 cases
+        for case in cases:  # For testing, limit to first 2 cases
             print(f"Evaluating {case}")
 
             gt_path = join(self.ground_truth_dir, f'{case}.nii.gz')
@@ -157,10 +158,8 @@ class Evaluator:
             # Here, we use prob_image as the mask image
             # and apply it to both prob_image and gt_image.
             images = self.mask_image(prob_image[:, 1, :, :, :], prob_image[:, 0, :, :, :], gt_image)
-            prob_masked = torch.stack([images[0], images[1]], dim=1).unsqueeze(0).permute(0, 2, 1)
-            print(f'prob_masked shape: {prob_masked.shape}')  # shape [1, 2, x*y*z[masked]]
-            gt_masked = images[2].unsqueeze(0)
-            print(f'gt_masked shape: {gt_masked.shape}')  # shape [1, x*y*z[masked]]
+            prob_masked = torch.stack([images[0], images[1]], dim=1).unsqueeze(0).permute(0, 2, 1) # shape [1, 2, x*y*z[masked]]
+            gt_masked = images[2].unsqueeze(0) # shape [1, x*y*z[masked]] 
             ece_masked = self.ece(prob_masked, gt_masked)
 
             mae = self.mae(ent_image, prob_image[:, 1, :, :, :], gt_image)
@@ -177,7 +176,13 @@ class Evaluator:
             }
 
             print(f'Finished {case}')
-            torch.cuda.empty_cache()
+
+            # Clear GPU memory
+            
+            del gt_image, prob_image, ent_image, seg_binary, seg_onehot_class_last, seg_onehot
+            gc.collect()
+            if self.gpu_device is not None:
+                torch.cuda.empty_cache()
         
         # Calculate summary metrics
         self.results['summary'] = {
