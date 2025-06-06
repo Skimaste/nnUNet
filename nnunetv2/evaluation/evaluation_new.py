@@ -39,23 +39,35 @@ class Evaluator:
         )
 
     
-    def mae_metric(self, y_pred, y):
+    def mae_metric(self, y_pred, y, y_ent):
         """
         Calculate Mean Absolute Error (MAE) between entropy maps and ground truth minus prediction.
         """
-        return torch.mean(torch.abs(y_pred - y))
+        return torch.mean(torch.abs(torch.abs(y_pred - y) - y_ent))
 
 
-    def calc_metrics(self, gt, pred, spacing=None):
-        hd95 = self.hausdorff_metric(y_pred=pred, y=gt, spacing=spacing).aggregate().item()
-        dice = self.dice_metric(y_pred=pred, y=gt).aggregate().item()
-        ece = self.calibration_metric.update(pred, gt.squeeze(1)).compute().item()
-        mae = self.mae_metric(y_pred=pred, y=gt).item()
+    def calc_metrics(self, gt, pred, pred_seg, entropy, spacing=None):
+
+        # hd95
+        self.hausdorff_metric(y_pred=pred_seg, y=gt, spacing=spacing)
+        hd95 = self.hausdorff_metric.aggregate().item()
         self.hausdorff_metric.reset()
-        self.calibration_metric.reset()
+
+        # dice
+        self.dice_metric(y_pred=pred_seg, y=gt)
+        dice = self.dice_metric.aggregate().item()
         self.dice_metric.reset()
 
+        # ECE
+        self.calibration_metric.update(pred, gt.squeeze(1))
+        ece = self.calibration_metric.compute().item()
+        self.calibration_metric.reset()
+
+        # MAE
+        mae = self.mae_metric(y_pred=pred, y=gt, y_ent=entropy).item()
+
         return hd95, dice, ece, mae
+
 
     def mask_image(self, gt, pred):
         # Apply the masking threshold to the ground truth and prediction
@@ -63,6 +75,7 @@ class Evaluator:
         gt_masked = gt[mask]
         pred_masked = pred[mask]
         return gt_masked, pred_masked
+
 
     def load_image(self, image_path):
         # Load the image using nibabel
@@ -74,11 +87,13 @@ class Evaluator:
         img_data = img.get_fdata()
         return torch.tensor(img_data, dtype=torch.float32).unsqueeze(0), img.affine
     
+
     def save_results(self, results):
         # Save the results to a JSON file
         output_file = join(self.output_dir, 'evaluation_results.json')
         save_json(results, output_file)
         print(f"Results saved to {output_file}")
+
 
     def evaluate(self):
         if not isdir(self.ground_truth_dir) or not isdir(self.predictions_dir):
@@ -86,33 +101,72 @@ class Evaluator:
 
         gt_files = listdir(self.ground_truth_dir)
         pred_files = listdir(self.predictions_dir)
+        ent_files = listdir(self.predictions_dir) # !!! what are these called?
 
         if len(gt_files) != len(pred_files):
             raise ValueError("Number of ground truth files does not match number of prediction files.")
 
-        for gt_file, pred_file in zip(gt_files, pred_files):
+        for gt_file, pred_file, ent_file in zip(gt_files, pred_files, ent_files):
             gt_path = join(self.ground_truth_dir, gt_file)
             pred_path = join(self.predictions_dir, pred_file)
+            ent_path = join(self.predictions_dir, ent_file)
 
             gt_image, spacing = self.load_image(gt_path)
             pred_image, _ = self.load_image(pred_path)
+            ent_image, _ = self.load_image(ent_path)
+
+            # put the images on the GPU if specified
+            if self.gpu_device is not None:
+                gt_image = gt_image.to(self.gpu_device)
+                pred_image = pred_image.to(self.gpu_device)
+                ent_image = ent_image.to(self.gpu_device)
 
             # Apply masking
             gt_masked, pred_masked = self.mask_image(gt_image, pred_image)
 
             # Calculate metrics
-            hd95, dice, ece = self.calc_metrics(gt_masked, pred_masked, spacing=spacing)
+            hd95, dice, ece, mae = self.calc_metrics(gt_masked, pred_masked, entropy=entropy, spacing=spacing)
 
             # Store results
             self.results[gt_file] = {
                 'Hausdorff95': hd95,
                 'Dice': dice,
-                'ECE': ece
+                'ECE': ece,
+                'MAE': mae
             }
 
         # Save results to output directory
         self.save_results(self.results)
 
-    
+
+    def test_run(self):
+        print("Starting evaluation...")
+        self.evaluate()
+        print("Evaluation completed successfully.")
+
+
+    def run(self):
+        self.evaluate()
         
 
+
+if __name__ == '__main__':
+    # Example usage
+    gt = torch.randint(0, 2, (1, 1, 64, 64, 64))  # Example ground truth tensor
+    pred = torch.softmax(torch.rand(1, 2, 64, 64, 64), dim=1)  # Example prediction tensor
+    pred_seg = torch.argmax(pred, dim=1, keepdim=True)  # Convert to segmentation
+
+    def entropy_from_softmax(pred):
+        return -torch.sum(pred * torch.log(pred + 1e-10), dim=1, keepdim=True)
+    entropy = entropy_from_softmax(pred)  # Calculate entropy from softmax predictions
+    # entropy = torch.rand(1, 1, 64, 64, 64)  # Example entropy tensor
+
+    # print shapes of tensors
+    print(f"GT shape: {gt.shape}, Pred shape: {pred.shape}, Entropy shape: {entropy.shape}")
+
+    eval = Evaluator('none', 'none', gpu_device=2)
+
+    for x in (gt, pred, entropy):
+        x.to(eval.gpu_device)
+
+    print(eval.calc_metrics(gt, pred, pred_seg, entropy))
