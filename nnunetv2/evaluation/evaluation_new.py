@@ -210,8 +210,10 @@ if __name__ == '__main__':
 
     model = 'nnUNetTrainerDropout__p00_s2__3d_fullres'
 
+    '''
     eval = Evaluator(dataset, join(model, 'base'), gpu_device=2)
     eval.run()
+    '''
     
     eval = Evaluator(dataset, join(model, 'ens'), gpu_device=2)
     eval.run()
