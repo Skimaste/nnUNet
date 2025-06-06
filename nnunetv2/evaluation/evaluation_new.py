@@ -1,9 +1,12 @@
 from nnunetv2.paths import nnUNet_results, nnUNet_raw
 from batchgenerators.utilities.file_and_folder_operations import (
-    load_json, join, isdir, listdir, save_json
+    load_json, join, isdir, listdir, save_json, maybe_mkdir_p
 )
 import nibabel as nib
 import torch
+import re
+import numpy as np
+
 from monai.metrics.hausdorff_distance import HausdorffDistanceMetric
 from monai.metrics.meandice import DiceMetric
 from torchmetrics.classification import MulticlassCalibrationError
@@ -40,124 +43,155 @@ class Evaluator:
             reduction=dice_reduction
             )
 
-    
-    def mae_metric(self, y_pred, y, y_ent):
+
+    # metrics
+    def hd95(self, y_pred, y, spacing=None):
         """
-        Calculate Mean Absolute Error (MAE) between entropy maps and ground truth minus prediction.
+        Calculate the 95th percentile of the Hausdorff distance.
         """
-        return torch.mean(torch.abs(torch.abs(y_pred - y) - y_ent))
-
-
-    def calc_metrics(self, gt, pred, pred_seg, entropy, spacing=None):
-
-        # hd95
-        self.hausdorff_metric(y_pred=pred_seg, y=gt, spacing=spacing)
+        self.hausdorff_metric(y_pred=y_pred, y=y, spacing=spacing)
         hd95 = self.hausdorff_metric.aggregate().item()
         self.hausdorff_metric.reset()
+        return hd95
+    
 
-        # dice
-        self.dice_metric(y_pred=pred_seg, y=gt)
+    def dice(self, y_pred, y):
+        """
+        Calculate the Dice coefficient.
+        """
+        self.dice_metric(y_pred=y_pred, y=y)
         dice = self.dice_metric.aggregate().item()
         self.dice_metric.reset()
+        return dice
+    
 
-        # ECE
-        self.calibration_metric.update(pred, gt.squeeze(1))
+    def ece(self, y_pred, y):
+        """
+        Calculate the Expected Calibration Error (ECE).
+        """
+        self.calibration_metric.update(y_pred, y)
         ece = self.calibration_metric.compute().item()
         self.calibration_metric.reset()
+        return ece
+    
 
-        # MAE
-        mae = self.mae_metric(y_pred=pred, y=gt, y_ent=entropy).item()
-
-        return hd95, dice, ece, mae
+    def mae(self, y_ent, y_pred, y):
+        """
+        Calculate the Mean Absolute Error (MAE).
+        """
+        error = torch.abs(y_pred - y)
+        mae = torch.mean(torch.abs(error - y_ent))
+        return mae.item()
 
 
     def mask_image(self, mask_from, *args):
         # Apply the masking from the first image to all subsequent images
         mask = mask_from > self.masking_threshold
-        masked_images = []
+        masked_images = [mask_from[mask]]
         for image in args:
             if image.shape != mask_from.shape:
                 raise ValueError("All images must have the same shape for masking.")
             masked_image = image[mask]
             masked_images.append(masked_image)
-        if len(masked_images) == 1:
-            return masked_images[0], None
         return masked_images
 
 
-    def load_image(self, image_path):
+    def load_image(self, image_path, is_label=False):
         # Load the image using nibabel
-        if not isdir(image_path):
-            raise ValueError(f"Provided path {image_path} is not a directory.")
-        if not listdir(image_path):
-            raise ValueError(f"No images found in the directory {image_path}.")
         img = nib.load(image_path)
         img_data = img.get_fdata()
-        return torch.tensor(img_data, dtype=torch.float32).unsqueeze(0), img.affine
-    
+        spacing = np.abs(img.affine.diagonal()[:3]) # Get spacing from the affine matrix
+        if is_label:
+            return torch.tensor(img_data, dtype=torch.long).unsqueeze(0), spacing
+        return torch.tensor(img_data, dtype=torch.float32).unsqueeze(0), spacing
+
 
     def save_results(self, results):
         # Save the results to a JSON file
-        output_file = join(self.output_dir, 'evaluation_results.json')
+        output_file = join(self.output_dir, 'evaluation_summary.json')
         save_json(results, output_file)
         print(f"Results saved to {output_file}")
 
 
+    def find_cases(self):
+        cases = listdir(self.predictions_dir)
+        cases = [case for case in cases if re.match(r'case_\d+', case)]
+        return cases
+
+
     def evaluate(self):
-        if not isdir(self.ground_truth_dir) or not isdir(self.predictions_dir):
-            raise ValueError("Ground truth and predictions directories must exist.")
+        cases = self.find_cases()
 
-        gt_files = listdir(self.ground_truth_dir)
-        pred_files = listdir(self.predictions_dir)
-        ent_files = listdir(self.predictions_dir) # !!! what are these called?
+        for case in cases[:1]:  # For testing, limit to first 2 cases
+            print(f"Evaluating {case}")
 
-        if len(gt_files) != len(pred_files):
-            raise ValueError("Number of ground truth files does not match number of prediction files.")
+            gt_path = join(self.ground_truth_dir, f'{case}.nii.gz')
+            pred_path = join(self.predictions_dir, case, f'{case}_mean.nii.gz')
+            ent_path = join(self.predictions_dir, case, f'{case}_shannon_entropy.nii.gz')
 
-        for gt_file, pred_file, ent_file in zip(gt_files, pred_files, ent_files):
-            gt_path = join(self.ground_truth_dir, gt_file)
-            pred_path = join(self.predictions_dir, pred_file)
-            ent_path = join(self.predictions_dir, ent_file)
-
-            gt_image, spacing = self.load_image(gt_path)
-            pred_image, _ = self.load_image(pred_path)
+            gt_image, spacing = self.load_image(gt_path, is_label=True)  # Load ground truth as label
+            prob_image, _ = self.load_image(pred_path)
             ent_image, _ = self.load_image(ent_path)
 
             # put the images on the GPU if specified
             if self.gpu_device is not None:
-                gt_image = gt_image.to(self.gpu_device)
-                pred_image = pred_image.to(self.gpu_device)
-                ent_image = ent_image.to(self.gpu_device)
+                gt_image = gt_image.to(self.gpu_device) # shape [1, 512, 512, z]
+                prob_image = prob_image.to(self.gpu_device) # shape [1, 2, 512, 512, z]
+                ent_image = ent_image.to(self.gpu_device) # shape [1, 512, 512, z]
 
-            # Apply masking
-            gt_masked, pred_masked = self.mask_image(gt_image, pred_image)
+            seg_binary = torch.argmax(prob_image, dim=1)  # shape [1, 512, 512, z]
+            seg_onehot_class_last = torch.nn.functional.one_hot(seg_binary, num_classes=prob_image.shape[1])  # shape [1, 512, 512, z, 2]
+            seg_onehot = seg_onehot_class_last.permute(0, 4, 1, 2, 3)  # shape [1, 2, 512, 512, z]
 
-            # Calculate metrics
-            hd95, dice, ece, mae = self.calc_metrics(gt_masked, pred_masked, entropy=entropy, spacing=spacing)
+            # print(f'seg_image shape: {seg_binary.shape}, seg_onehot shape: {seg_onehot.shape}, gt_image shape: {gt_image.shape}, prob_image shape: {prob_image.shape}, ent_image shape: {ent_image.shape}')
+
+            # Calculate metrics for segmentation
+            hd95 = self.hd95(seg_onehot, gt_image.unsqueeze(0), spacing=spacing)
+            dice = self.dice(seg_onehot, gt_image.unsqueeze(0))
+
+            # Calculate metrics for probabilities and entropy
+            ece = self.ece(prob_image, gt_image)
+            # Apply masking to the images
+            # Note: The mask_image function expects the first argument to be the mask image
+            # and applies it to all subsequent images.
+            # Here, we use prob_image as the mask image
+            # and apply it to both prob_image and gt_image.
+            images = self.mask_image(prob_image[:, 1, :, :, :], prob_image[:, 0, :, :, :], gt_image)
+            prob_masked = torch.stack([images[0], images[1]], dim=1).unsqueeze(0).permute(0, 2, 1)
+            print(f'prob_masked shape: {prob_masked.shape}')  # shape [1, 2, x*y*z[masked]]
+            gt_masked = images[2].unsqueeze(0)
+            print(f'gt_masked shape: {gt_masked.shape}')  # shape [1, x*y*z[masked]]
+            ece_masked = self.ece(prob_masked, gt_masked)
+
+            mae = self.mae(ent_image, prob_image[:, 1, :, :, :], gt_image)
+            mae_masked = self.mae(*self.mask_image(ent_image, prob_image[:, 1, :, :, :], gt_image)) # Apply masking
 
             # Store results
-            self.results[gt_file] = {
+            self.results[case] = {
                 'Hausdorff95': hd95,
                 'Dice': dice,
                 'ECE': ece,
-                'MAE': mae
+                'ECE_masked': ece_masked,
+                'MAE': mae,
+                'MAE_masked': mae_masked
             }
 
+            print(f'Finished {case}')
+            torch.cuda.empty_cache()
+        
+        # Calculate summary metrics
         self.results['summary'] = {
             'Hausdorff95': torch.tensor([res['Hausdorff95'] for res in self.results.values() if 'Hausdorff95' in res]).mean().item(),
             'Dice': torch.tensor([res['Dice'] for res in self.results.values() if 'Dice' in res]).mean().item(),
             'ECE': torch.tensor([res['ECE'] for res in self.results.values() if 'ECE' in res]).mean().item(),
-            'MAE': torch.tensor([res['MAE'] for res in self.results.values() if 'MAE' in res]).mean().item()
+            'ECE_masked': torch.tensor([res['ECE_masked'] for res in self.results.values() if 'ECE_masked' in res]).mean().item(),
+            'MAE': torch.tensor([res['MAE'] for res in self.results.values() if 'MAE' in res]).mean().item(),
+            'MAE_masked': torch.tensor([res['MAE_masked'] for res in self.results.values() if 'MAE_masked' in res]).mean().item()
         }
-
+        
         # Save results to output directory
+        maybe_mkdir_p(self.output_dir)
         self.save_results(self.results)
-
-
-    def test_run(self):
-        print("Starting evaluation...")
-        self.evaluate()
-        print("Evaluation completed successfully.")
 
 
     def run(self):
@@ -167,35 +201,50 @@ class Evaluator:
 
 if __name__ == '__main__':
 
-    '''
-    # Example usage
-    gt = torch.randint(0, 2, (1, 1, 64, 64, 64))  # Example ground truth tensor
-    pred = torch.softmax(torch.rand(1, 2, 64, 64, 64), dim=1)  # Example prediction tensor
-    pred_seg = torch.argmax(pred, dim=1, keepdim=True)  # Convert to segmentation
+    dataset = 'Dataset003_ImageCAS_split'
 
-    def entropy_from_softmax(pred):
-        return -torch.sum(pred * torch.log(pred + 1e-10), dim=1, keepdim=True)
-    entropy = entropy_from_softmax(pred)  # Calculate entropy from softmax predictions
-    # entropy = torch.rand(1, 1, 64, 64, 64)  # Example entropy tensor
+    model = 'nnUNetTrainerDropout__p00_s2__3d_fullres'
 
-    # print shapes of tensors
-    print(f"GT shape: {gt.shape}, Pred shape: {pred.shape}, Entropy shape: {entropy.shape}")
+    eval = Evaluator(dataset, join(model, 'base'), gpu_device=2)
+    eval.run()
+    
+    eval = Evaluator(dataset, join(model, 'ens'), gpu_device=2)
+    eval.run()
 
-    eval = Evaluator('none', 'none', gpu_device=2)
+    eval = Evaluator(dataset, join(model, 'tta'), gpu_device=2)
+    eval.run()
 
-    for x in (gt, pred, entropy):
-        x.to(eval.gpu_device)
+    eval = Evaluator(dataset, join(model, 'tta_ens'), gpu_device=2)
+    eval.run()
 
-    print(eval.calc_metrics(gt, pred, pred_seg, entropy))
+    model = 'nnUNetTrainerDropout__p02_s2__3d_fullres'
 
-    '''
+    eval = Evaluator(dataset, join(model, 'all'), gpu_device=2)
+    eval.run()
 
-    eval = Evaluator('Dataset003_ImageCAS_split', 'nnUNetTrainerDropout__p00_s2__3d_fullres/base', gpu_device=2)
+    eval = Evaluator(dataset, join(model, 'ens_mcd'), gpu_device=2)
+    eval.run()
 
-    # print directories used by evaluator
-    print(f"Ground truth directory: {eval.ground_truth_dir}")
-    print(f"Predictions directory: {eval.predictions_dir}")
-    # print output directory
-    print(f"Output directory: {eval.output_dir}")
+    eval = Evaluator(dataset, join(model, 'mcd'), gpu_device=2)
+    eval.run()
 
-    # eval.test_run()
+    eval = Evaluator(dataset, join(model, 'tta_mcd'), gpu_device=2)
+    eval.run()
+
+
+    # mc models
+    eval = Evaluator(dataset, 'nnUNetTrainerDropout__p02_s2__3d_fullres/inference', gpu_device=2)
+    eval.run()
+
+    eval = Evaluator(dataset, 'nnUNetTrainerDropout__p01_s2__3d_fullres/inference', gpu_device=2)
+    eval.run()
+
+    eval = Evaluator(dataset, 'nnUNetTrainerDropout__p05_s2__3d_fullres/inference', gpu_device=2)
+    eval.run()
+
+    eval = Evaluator(dataset, 'nnUNetTrainerDropout__p02_s1__3d_fullres/inference', gpu_device=2)
+    eval.run()
+
+    eval = Evaluator(dataset, 'nnUNetTrainerDropout__p02_s3__3d_fullres/inference', gpu_device=2)
+    eval.run()
+    
