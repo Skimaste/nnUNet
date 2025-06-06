@@ -17,18 +17,20 @@ class Evaluator:
                  masking_threshold=0.1
                  ):
         self.dataset = dataset
-        self.ground_truth_dir = join(nnUNet_raw, dataset, 'imagesTs')
+        self.ground_truth_dir = join(nnUNet_raw, dataset, 'labelsTs')
         self.predictions_dir = join(nnUNet_results, dataset, model_dir)
         self.output_dir = join(self.predictions_dir, 'evaluation_results')
         self.gpu_device = (torch.device(gpu_device) if gpu_device is not None else None)
         
         self.results = {}
         self.masking_threshold = masking_threshold
+
+        # Initialize metrics
         self.hausdorff_metric = HausdorffDistanceMetric(
             include_background=hd_distance_include_background, 
             distance_metric=hd_distance_metric, 
             percentile=hd_distance_percentile
-        )
+            )
         self.calibration_metric = MulticlassCalibrationError(
             num_classes=calibration_metric_num_classes, 
             n_bins=calibration_metric_n_bins
@@ -36,7 +38,7 @@ class Evaluator:
         self.dice_metric = DiceMetric(
             include_background=dice_include_background, 
             reduction=dice_reduction
-        )
+            )
 
     
     def mae_metric(self, y_pred, y, y_ent):
@@ -69,12 +71,18 @@ class Evaluator:
         return hd95, dice, ece, mae
 
 
-    def mask_image(self, gt, pred):
-        # Apply the masking threshold to the ground truth and prediction
-        mask = pred > self.masking_threshold
-        gt_masked = gt[mask]
-        pred_masked = pred[mask]
-        return gt_masked, pred_masked
+    def mask_image(self, mask_from, *args):
+        # Apply the masking from the first image to all subsequent images
+        mask = mask_from > self.masking_threshold
+        masked_images = []
+        for image in args:
+            if image.shape != mask_from.shape:
+                raise ValueError("All images must have the same shape for masking.")
+            masked_image = image[mask]
+            masked_images.append(masked_image)
+        if len(masked_images) == 1:
+            return masked_images[0], None
+        return masked_images
 
 
     def load_image(self, image_path):
@@ -135,6 +143,13 @@ class Evaluator:
                 'MAE': mae
             }
 
+        self.results['summary'] = {
+            'Hausdorff95': torch.tensor([res['Hausdorff95'] for res in self.results.values() if 'Hausdorff95' in res]).mean().item(),
+            'Dice': torch.tensor([res['Dice'] for res in self.results.values() if 'Dice' in res]).mean().item(),
+            'ECE': torch.tensor([res['ECE'] for res in self.results.values() if 'ECE' in res]).mean().item(),
+            'MAE': torch.tensor([res['MAE'] for res in self.results.values() if 'MAE' in res]).mean().item()
+        }
+
         # Save results to output directory
         self.save_results(self.results)
 
@@ -151,6 +166,8 @@ class Evaluator:
 
 
 if __name__ == '__main__':
+
+    '''
     # Example usage
     gt = torch.randint(0, 2, (1, 1, 64, 64, 64))  # Example ground truth tensor
     pred = torch.softmax(torch.rand(1, 2, 64, 64, 64), dim=1)  # Example prediction tensor
@@ -170,3 +187,15 @@ if __name__ == '__main__':
         x.to(eval.gpu_device)
 
     print(eval.calc_metrics(gt, pred, pred_seg, entropy))
+
+    '''
+
+    eval = Evaluator('Dataset003_ImageCAS_split', 'nnUNetTrainerDropout__p00_s2__3d_fullres/base', gpu_device=2)
+
+    # print directories used by evaluator
+    print(f"Ground truth directory: {eval.ground_truth_dir}")
+    print(f"Predictions directory: {eval.predictions_dir}")
+    # print output directory
+    print(f"Output directory: {eval.output_dir}")
+
+    # eval.test_run()
