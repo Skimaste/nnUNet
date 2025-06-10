@@ -1,12 +1,13 @@
 from nnunetv2.paths import nnUNet_results, nnUNet_raw
 import torch
-from batchgenerators.utilities.file_and_folder_operations import join
+from batchgenerators.utilities.file_and_folder_operations import join, listdir
 from nnunetv2.inference.predict_from_raw_data_monte_carlo_dropout import nnUNetPredictorMCDropout
 from nnunetv2.imageio.simpleitk_reader_writer import SimpleITKIO
 import numpy as np
 import os
 import shutil
 import nibabel as nib
+import re
 
 import datetime # for converting seconds to hours, minutes, seconds
 
@@ -205,32 +206,92 @@ class MonteCarloInference:
         img = nib.Nifti1Image(data, affine=affine)
         nib.save(img, join(outdir, f'case_{case}/case_{case}_{metric}.nii.gz'))
 
+    def save_image_clean(self, data, outdir, case, metric):
+        # Save the uncertainty metric as a NIfTI file
+        os.makedirs(join(outdir, f'{case}'), exist_ok=True)
+
+        affine = nib.load(join(self.indir, f'{case}_0000.nii.gz')).affine
+
+        img = nib.Nifti1Image(data, affine=affine)
+        nib.save(img, join(outdir, f'{case}/{case}_{metric}.nii.gz'))
+
     def run(self):
         self.calc_time()
         self.run_inference()
         self.compute_uncertainty()
 
+
+    def find_cases(self):
+        cases = listdir(self.model_path)
+        cases = [case for case in cases if re.match(r'case_\d+', case)]
+        return cases
+
+    def give_seg_and_foreground(self):
+        cases = self.find_cases()
+        for case in cases:
+            mean_file_path = join(self.model_path, case, f'{case}_mean.nii.gz')
+
+            mean_image = nib.load(mean_file_path).get_fdata()
+
+            seg_image = np.argmax(mean_image, axis=0)
+            seg_image = seg_image.astype(np.uint8)
+
+            foreground_image = mean_image[1, :, :, :]
+            foreground_image = foreground_image.astype(np.float32)
+
+            self.save_image_clean(seg_image, self.model_path, case, 'seg')
+            self.save_image_clean(foreground_image, self.model_path, case, 'foreground')
+
+
+
+
 if __name__ == "__main__":
 
-    nnUNet_results = '/mnt/processing/emil/nnUNet_results'   
+    nnUNet_results = '/mnt/processing/emil/nnUNet_results'
     
-    mc_inference = MonteCarloInference(
-        dataset_name = 'Dataset003_ImageCAS_split',
-        model='nnUNetTrainerDropout__p05_s2__3d_fullres',
-        n_cases=20,
-        n_sim=30,
-        folds=(0,),
-        cuda_device=3,
-        config_name=None,
-        tta=True,
-        variance=True,
-        mean=True,
-        entropy=True
-    )
+    models = ['base', 'tta', 'ens', 'tta_ens']
+
+    for mod in models:
+        mc_inference = MonteCarloInference(
+            dataset_name = 'Dataset003_ImageCAS_split',
+            model=join('nnUNetTrainerDropout__p00_s2__3d_fullres', mod),
+            n_cases=20,
+            n_sim=30,
+            folds=(0,),
+            cuda_device=3,
+            config_name=None,
+            tta=True,
+            variance=True,
+            mean=True,
+            entropy=True
+        )
+        
+        # mc_inference.run()
+        # mc_inference.compute_uncertainty()
+        mc_inference.give_seg_and_foreground()
+
+    models = ['mcd', 'tta_mcd', 'ens_mcd', 'all']
+
+    for mod in models:
+        mc_inference = MonteCarloInference(
+            dataset_name = 'Dataset003_ImageCAS_split',
+            model=join('nnUNetTrainerDropout__p02_s2__3d_fullres', mod),
+            n_cases=20,
+            n_sim=30,
+            folds=(0,),
+            cuda_device=3,
+            config_name=None,
+            tta=True,
+            variance=True,
+            mean=True,
+            entropy=True
+        )
+        
+        # mc_inference.run()
+        # mc_inference.compute_uncertainty()
+        mc_inference.give_seg_and_foreground()
     
-    # mc_inference.run()
-    mc_inference.compute_uncertainty()
-    
+    '''
     mc_inference = MonteCarloInference(
         dataset_name = 'Dataset003_ImageCAS_split',
         model='nnUNetTrainerDropout__p02_s2__3d_fullres',
@@ -294,4 +355,4 @@ if __name__ == "__main__":
 
     # mc_inference.run()
     mc_inference.compute_uncertainty()
-   
+   '''
