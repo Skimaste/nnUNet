@@ -249,7 +249,28 @@ if __name__ == "__main__":
 
     nnUNet_results = '/mnt/processing/emil/nnUNet_results'
     
-    models = ['base', 'tta', 'ens', 'mcd', 'tta_ens', 'tta_mcd', 'ens_mcd', 'all']
+    models = ['base', 'tta', 'ens', 'tta_ens']
+
+    for mod in models:
+        mc_inference = MonteCarloInference(
+            dataset_name = 'Dataset003_ImageCAS_split',
+            model=join('nnUNetTrainerDropout__p00_s2__3d_fullres', mod),
+            n_cases=20,
+            n_sim=30,
+            folds=(0,),
+            cuda_device=3,
+            config_name=None,
+            tta=True,
+            variance=True,
+            mean=True,
+            entropy=True
+        )
+        
+        # mc_inference.run()
+        # mc_inference.compute_uncertainty()
+        mc_inference.give_seg_and_foreground()
+
+    models = ['mcd', 'tta_mcd', 'ens_mcd', 'all']
 
     for mod in models:
         mc_inference = MonteCarloInference(
