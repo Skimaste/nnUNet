@@ -1,0 +1,27 @@
+# YAML 1.2
+# Metadata for citation of this software according to the CFF format (https://citation-file-format.github.io/)
+#
+---
+title: "MCU-Net"
+abstract: "nnU-Net with Monte Carlo Dropout implemented"
+authors:
+  - name: "Emil Juul Elberg and Oswald Eide Bech"
+date-released: 2025-06-15
+version: "1"
+license: "MIT"
+repository-code: "https://github.com/Skimaste/nnUNet"
+url: "https://github.com/Skimaste/nnUNet"
+cff-version: "1.2.0"
+message: "If you use this software, please cite it using these metadata."
+preferred-citation:
+  type: article
+  authors:
+  - given-names: "Emil Juul"
+    family-names: "Elberg"
+  - given-names: "Oswald Eide"
+    family-names: "Bech"
+  doi: "https://github.com/Skimaste/nnUNet"
+  month: 6
+  year: 2025
+  title: "nnU-Net with MCD"
+...
