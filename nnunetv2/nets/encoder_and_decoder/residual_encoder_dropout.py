@@ -93,7 +93,7 @@ class ResidualEncoderDropout(nn.Module):
             if stem_channels is None:
                 stem_channels = features_per_stage[0]
             self.stem = StackedConvBlocks(1, conv_op, input_channels, stem_channels, kernel_sizes[0], 1, conv_bias,
-                                          norm_op, norm_op_kwargs, None, None, nonlin, nonlin_kwargs)
+                                          norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs, nonlin, nonlin_kwargs)
             input_channels = stem_channels
         else:
             self.stem = None
